@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Quêtes d'Anomalies - Multijoueur</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#7c3aed">
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -38,95 +36,145 @@ try {
     firebase.initializeApp(firebaseConfig);
     auth = firebase.auth();
     database = firebase.database();
-    console.log("Firebase initialisé");
-  } else {
-    console.warn("Firebase non configuré - mode local");
   }
-} catch (e) { console.error("Erreur Firebase:", e); }
+} catch (e) { console.error("Firebase error:", e); }
 
-// Constantes
-const STAT_NAMES = { endurance: "Endurance", force: "Force", vitesse: "Vitesse", perception: "Perception", sagesse: "Sagesse", intelligence: "Intelligence" };
-const STAT_MAPPING = { "Endurance": "endurance", "Force": "force", "Vitesse": "vitesse", "Perception": "perception", "Sagesse": "sagesse", "Intelligence": "intelligence" };
-const STATISTIQUES = ["Endurance", "Force", "Vitesse", "Perception", "Sagesse", "Intelligence"];
-
-const PDV_SOURCES = {
-  KILL: { label: "Élimination", emoji: "💀", color: "text-red-600" },
-  QUEST_COMBAT: { label: "Quête combat", emoji: "⚔️", color: "text-orange-600" },
-  QUEST_EXCHANGE: { label: "Quête échange", emoji: "🔄", color: "text-blue-600" },
-  TERRITORY: { label: "Territoire", emoji: "🏰", color: "text-green-600" },
-  BOSS: { label: "Boss", emoji: "🐉", color: "text-yellow-600" },
-  START: { label: "Passage Départ", emoji: "🏁", color: "text-teal-600" },
-  BONUS: { label: "Bonus", emoji: "✨", color: "text-pink-600" }
-};
-
-const BIOMES = {
-  FORET: { name: "Forêt Cuivrée", resource: "cuivre", emoji: "🌳" },
-  DESERT: { name: "Désert Argenté", resource: "argent", emoji: "🏜️" },
-  MONTAGNE: { name: "Montagne Obsidienne", resource: "obsidienne", emoji: "⛰️" }
-};
-
-const BOSSES = {
-  FORET: { name: "Gardien de la Forêt", difficulty: 6, pdv: 3, emoji: "🌲" },
-  DESERT: { name: "Titan du Désert", difficulty: 8, pdv: 4, emoji: "🏜️" },
-  MONTAGNE: { name: "Seigneur de la Montagne", difficulty: 10, pdv: 5, emoji: "⛰️" }
-};
-
-const OBJECTIVES = [
-  { id: 'OBJ_OR', resource: 'or', amount: 12, pdv: 3, label: '12 Or', emoji: '💰' },
-  { id: 'OBJ_CUIVRE', resource: 'cuivre', amount: 9, pdv: 3, label: '9 Cuivre', emoji: '🥉' },
-  { id: 'OBJ_ARGENT', resource: 'argent', amount: 6, pdv: 3, label: '6 Argent', emoji: '🥈' },
-  { id: 'OBJ_OBSIDIENNE', resource: 'obsidienne', amount: 3, pdv: 3, label: '3 Obsidienne', emoji: '⬛' }
-];
-
-const EXCHANGE_RATES = { cuivre: { toOr: 2 }, argent: { toOr: 3 }, obsidienne: { toOr: 4 } };
-const RESOURCE_MAPPING = { "Pièce d'Or": { key: "or" }, "Ecorce Cuivrée": { key: "cuivre" }, "Sable Argenté": { key: "argent" }, "Roche Obsidienne": { key: "obsidienne" } };
-
-// Rules Engine
-const rulesEngine = {
-  getAttackBonus: (player, ctx) => {
-    let bonus = 0;
-    if (player.characterKey === 'CHASSEUR' && (ctx.type === 'QUEST' || ctx.isRanged)) bonus += 1;
-    if (player.characterKey === 'CHEVALIER' && ctx.type === 'TERRITORY' && ctx.isNeutral) bonus += 1;
-    return { bonus };
-  },
-  getHealOnSuccess: (attacker) => attacker.characterKey === 'HOMME_BETE' ? 2 : 0,
-  getQuestBonus: (player) => player.characterKey === 'VICAIRE' ? 1 : 0,
-  getStartGold: (charKey) => charKey === 'MARCHAND' ? 14 : 10,
-  getPassBonus: (player) => player.characterKey === 'MARCHAND' ? { or: 4 } : {},
-  canSacrificePv: (player) => player.characterKey === 'HOMME_BETE',
-  canReroll: (player) => player.characterKey === 'VICAIRE'
-};
-
-// Personnages
+// ============================================================================
+// PERSONNAGES
+// ============================================================================
 const CHARACTERS = {
-  CHASSEUR: { key: "CHASSEUR", name: "Le Chasseur", emoji: "🏹", pvMax: 6, role: "Harceleur – Distance", skills: ["Attaque à distance", "Pas de riposte à distance", "+1 attaques à distance"] },
-  MARCHAND: { key: "MARCHAND", name: "Le Marchand", emoji: "🪙", pvMax: 6, role: "Économie – Monopoles", skills: ["+4 Or au départ et passage Départ", "Achète territoires avec or", "+1 PDV/monopole fin"] },
-  HOMME_BETE: { key: "HOMME_BETE", name: "L'Homme-bête", emoji: "🐺", pvMax: 10, role: "Berserker – Tank", skills: ["Sacrifie PV → bonus jet", "+2 PV sur victoire", "Riposte 1 dégât"] },
-  CHEVALIER: { key: "CHEVALIER", name: "Le Chevalier", emoji: "⚔️", pvMax: 10, role: "Conquête – Territoires", skills: ["Capture territoire adverse", "+1 vs territoires neutres", "+1 PDV/biome fin"] },
-  VICAIRE: { key: "VICAIRE", name: "Le Vicaire", emoji: "✨", pvMax: 8, role: "Support – Optimisation", skills: ["Relance stat (1 ressource)", "Bénédiction +2 (2 ress.)", "+1 PDV/quête"] },
-  HERETIQUE: { key: "HERETIQUE", name: "L'Hérétique", emoji: "💀", pvMax: 8, role: "Sabotage – Assassinat", skills: ["Choisit stat vs joueur", "Malédiction -2 (3 PV)", "+1 PDV kill maudit"] }
+  CHASSEUR: {
+    key: "CHASSEUR", name: "Le Chasseur", emoji: "🏹", pvMax: 6,
+    role: "Harceleur – Quêtes – Combat à distance",
+    concept: "Spécialiste du contrôle spatial et de la pression indirecte.",
+    skills: [
+      "Attaque à distance (1 biome) sans riposte",
+      "+1 permanent vs monstres de quête",
+      "+1 vs territoires à distance"
+    ],
+    style: "Tactique, opportuniste, faible en défense directe.",
+    questBonus: 1, noCounterDamage: true
+  },
+  MARCHAND: {
+    key: "MARCHAND", name: "Le Marchand", emoji: "🪙", pvMax: 6,
+    role: "Économie – Monopoles – Fin de partie",
+    concept: "Transforme l'or en levier stratégique.",
+    skills: [
+      "+4 Or au départ et à chaque passage Départ",
+      "Achète territoires avec or (sans jet)",
+      "+1 PDV/monopole en fin de partie"
+    ],
+    style: "Gestionnaire, sécurisant, dangereux si non contenu.",
+    startGoldBonus: 4, passGoldBonus: 4
+  },
+  HOMME_BETE: {
+    key: "HOMME_BETE", name: "L'Homme-bête", emoji: "🐺", pvMax: 10,
+    role: "Berserker – Combat prolongé",
+    concept: "Convertit sa vitalité en puissance brute.",
+    skills: [
+      "Sacrifie PV → bonus au jet d'attaque",
+      "+2 PV sur victoire en combat",
+      "Inflige 1 dégât de riposte quand attaqué"
+    ],
+    style: "Agressif, résilient, très difficile à éliminer.",
+    healOnWin: 2, counterDamage: 1
+  },
+  CHEVALIER: {
+    key: "CHEVALIER", name: "Le Chevalier", emoji: "⚔️", pvMax: 10,
+    role: "Conquête – Contrôle de carte",
+    concept: "Chaque victoire militaire devient expansion durable.",
+    skills: [
+      "Capture territoire adverse sur victoire",
+      "+1 vs territoires neutres",
+      "+1 PDV/territoire par biome complet"
+    ],
+    style: "Expansionniste, dominateur, puissant sur la durée.",
+    territoryBonus: 1
+  },
+  VICAIRE: {
+    key: "VICAIRE", name: "Le Vicaire", emoji: "✨", pvMax: 8,
+    role: "Support – Optimisation – Contrôle indirect",
+    concept: "Manipule la chance et stabilise les situations critiques.",
+    skills: [
+      "Relance dé de stat (coût: 1 ressource)",
+      "Bénédiction +2 (coût: 2 ressources) - Recharge: Départ",
+      "+1 PDV par quête accomplie"
+    ],
+    style: "Flexible, diplomatique, fort en optimisation.",
+    questPdvBonus: 1, canReroll: true, canBless: true
+  },
+  HERETIQUE: {
+    key: "HERETIQUE", name: "L'Hérétique", emoji: "💀", pvMax: 8,
+    role: "Sabotage – Malédictions – Assassinat",
+    concept: "Affaiblit avant d'achever.",
+    skills: [
+      "Choisit la stat lors d'un combat vs joueur",
+      "Malédiction -2 (coût: 3 PV) - Recharge: Départ",
+      "+1 PDV quand il tue un joueur maudit"
+    ],
+    style: "Cruel, calculateur, extrêmement punitif en duel.",
+    chooseStat: true, canCurse: true, cursedKillBonus: 1
+  }
 };
 
-// Cartes
+const STATISTIQUES = ["Endurance", "Force", "Vitesse", "Perception", "Sagesse", "Intelligence"];
+const STAT_NAMES = {endurance:"Endurance",force:"Force",vitesse:"Vitesse",perception:"Perception",sagesse:"Sagesse",intelligence:"Intelligence"};
+const STAT_MAPPING = {"Endurance":"endurance","Force":"force","Vitesse":"vitesse","Perception":"perception","Sagesse":"sagesse","Intelligence":"intelligence"};
+
+const RESOURCE_MAPPING = {
+  "Pièce d'Or": { key: "or", displayName: "Or" },
+  "Ecorce Cuivrée": { key: "cuivre", displayName: "Cuivre" },
+  "Sable Argenté": { key: "argent", displayName: "Argent" },
+  "Roche Obsidienne": { key: "obsidienne", displayName: "Obsidienne" }
+};
+
+// ============================================================================
+// CARTES ANOMALIES
+// ============================================================================
 const ANOMALIES = [
-  "Soignez 2 [Point de vie].", "Soignez 4 [Point de vie].", "Soignez 6 [Point de vie].",
-  "Perdez 2 [Point de vie].", "Perdez 4 [Point de vie].", "Perdez 6 [Point de vie].",
-  "Obtenez [Bénédiction].", "Obtenez [Bénédiction].", "Obtenez [Malédiction].", "Obtenez [Malédiction].",
-  "Gagnez 8 [Pièce d'Or].", "Gagnez 4 [Pièce d'Or].",
-  "Gagnez 6 [Ecorce Cuivrée].", "Gagnez 3 [Ecorce Cuivrée].",
-  "Gagnez 4 [Sable Argenté].", "Gagnez 2 [Sable Argenté].",
-  "Gagnez 2 [Roche Obsidienne].", "Gagnez 1 [Roche Obsidienne].",
-  "Perdez 4 [Pièce d'Or].", "Perdez 3 [Ecorce Cuivrée].", "Perdez 2 [Sable Argenté].",
-  "Recharger votre pouvoir."
+  "Soignez 2 [Point de vie].",
+  "Soignez 4 [Point de vie].",
+  "Soignez 6 [Point de vie].",
+  "Perdez 2 [Point de vie].",
+  "Perdez 4 [Point de vie].",
+  "Perdez 6 [Point de vie].",
+  "Obtenez [Bénédiction] de [Endurance].",
+  "Obtenez [Bénédiction] de [Force].",
+  "Obtenez [Bénédiction] de [Vitesse].",
+  "Obtenez [Bénédiction] de [Perception].",
+  "Obtenez [Bénédiction] de [Sagesse].",
+  "Obtenez [Bénédiction] de [Intelligence].",
+  "Obtenez [Malédiction] de [Endurance].",
+  "Obtenez [Malédiction] de [Force].",
+  "Obtenez [Malédiction] de [Vitesse].",
+  "Obtenez [Malédiction] de [Perception].",
+  "Obtenez [Malédiction] de [Sagesse].",
+  "Obtenez [Malédiction] de [Intelligence].",
+  "Gagnez 8 [Pièce d'Or].",
+  "Gagnez 4 [Pièce d'Or].",
+  "Gagnez 6 [Ecorce Cuivrée].",
+  "Gagnez 3 [Ecorce Cuivrée].",
+  "Gagnez 4 [Sable Argenté].",
+  "Gagnez 2 [Sable Argenté].",
+  "Gagnez 2 [Roche Obsidienne].",
+  "Gagnez 1 [Roche Obsidienne].",
+  "Perdez 4 [Pièce d'Or].",
+  "Perdez 3 [Ecorce Cuivrée].",
+  "Perdez 2 [Sable Argenté].",
+  "Perdez 1 [Roche Obsidienne].",
+  "Rechargez votre pouvoir spécial."
 ];
 
+// ============================================================================
+// CARTES QUÊTES
+// ============================================================================
 const QUETES = [
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 10 pour gagner 5 [Point de victoire].",
+  "Dans le territoire [Forêt], éliminer la créature de difficulté 6 en [Endurance] pour gagner 3 [Point de victoire].",
+  "Dans le territoire [Forêt], éliminer la créature de difficulté 8 en [Force] pour gagner 4 [Point de victoire].",
+  "Dans le territoire [Désert], éliminer la créature de difficulté 6 en [Vitesse] pour gagner 3 [Point de victoire].",
+  "Dans le territoire [Désert], éliminer la créature de difficulté 8 en [Perception] pour gagner 4 [Point de victoire].",
+  "Dans le territoire [Montagne], éliminer la créature de difficulté 6 en [Sagesse] pour gagner 3 [Point de victoire].",
+  "Dans le territoire [Montagne], éliminer la créature de difficulté 10 en [Intelligence] pour gagner 5 [Point de victoire].",
   "Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].",
   "Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].",
   "Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].",
@@ -137,65 +185,73 @@ const QUETES = [
   "Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire]."
 ];
 
-// Utilitaires
-const genCode = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = ""; for (let i = 0; i < 6; i++) r += c[Math.floor(Math.random() * c.length)]; return r; };
-
-const getRandomAvailableResource = (player) => {
-  const a = [];
-  if (player.or > 0) a.push('or');
-  if (player.cuivre > 0) a.push('cuivre');
-  if (player.argent > 0) a.push('argent');
-  if (player.obsidienne > 0) a.push('obsidienne');
-  return a.length ? a[Math.floor(Math.random() * a.length)] : null;
+// ============================================================================
+// FONCTIONS UTILITAIRES
+// ============================================================================
+const genCode = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
 };
 
 function parseAnomaly(text) {
   let m;
   if (m = text.match(/Soignez (\d+)/)) return { type: 'heal', amount: +m[1] };
   if (m = text.match(/Perdez (\d+) \[Point de vie\]/)) return { type: 'damage', amount: +m[1] };
-  if (text.includes('[Bénédiction]')) {
-    const stats = Object.keys(STAT_NAMES);
-    return { type: 'bless', stat: stats[Math.floor(Math.random() * stats.length)] };
+  if (m = text.match(/\[Bénédiction\] de \[(.+?)\]/)) {
+    const statKey = STAT_MAPPING[m[1]];
+    return { type: 'bless', stat: statKey, statName: m[1] };
   }
-  if (text.includes('[Malédiction]')) {
-    const stats = Object.keys(STAT_NAMES);
-    return { type: 'curse', stat: stats[Math.floor(Math.random() * stats.length)] };
+  if (m = text.match(/\[Malédiction\] de \[(.+?)\]/)) {
+    const statKey = STAT_MAPPING[m[1]];
+    return { type: 'curse', stat: statKey, statName: m[1] };
   }
-  if (m = text.match(/Gagnez (\d+) \[Pièce/)) return { type: 'gain', resource: 'or', amount: +m[1] };
-  if (m = text.match(/Gagnez (\d+) \[Ecorce/)) return { type: 'gain', resource: 'cuivre', amount: +m[1] };
-  if (m = text.match(/Gagnez (\d+) \[Sable/)) return { type: 'gain', resource: 'argent', amount: +m[1] };
-  if (m = text.match(/Gagnez (\d+) \[Roche/)) return { type: 'gain', resource: 'obsidienne', amount: +m[1] };
-  if (m = text.match(/Perdez (\d+) \[Pièce/)) return { type: 'lose', resource: 'or', amount: +m[1] };
-  if (m = text.match(/Perdez (\d+) \[Ecorce/)) return { type: 'lose', resource: 'cuivre', amount: +m[1] };
-  if (m = text.match(/Perdez (\d+) \[Sable/)) return { type: 'lose', resource: 'argent', amount: +m[1] };
-  if (m = text.match(/Perdez (\d+) \[Roche/)) return { type: 'lose', resource: 'obsidienne', amount: +m[1] };
-  if (text.includes('Recharger')) return { type: 'recharge' };
+  if (m = text.match(/Gagnez (\d+) \[Pièce d'Or\]/)) return { type: 'gainOr', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Pièce d'Or\]/)) return { type: 'loseOr', amount: +m[1] };
+  if (m = text.match(/Gagnez (\d+) \[Ecorce/)) return { type: 'gainCuivre', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Ecorce/)) return { type: 'loseCuivre', amount: +m[1] };
+  if (m = text.match(/Gagnez (\d+) \[Sable/)) return { type: 'gainArgent', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Sable/)) return { type: 'loseArgent', amount: +m[1] };
+  if (m = text.match(/Gagnez (\d+) \[Roche/)) return { type: 'gainObsidienne', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Roche/)) return { type: 'loseObsidienne', amount: +m[1] };
+  if (text.includes('Rechargez')) return { type: 'recharge' };
   return { type: 'other' };
 }
 
 function parseQuest(text) {
   const pdvMatch = text.match(/(\d+) \[Point de victoire\]/);
   const pdv = pdvMatch ? +pdvMatch[1] : 0;
-  const exchMatch = text.match(/Echanger (\d+) \[(.+?)\] contre/);
-  if (exchMatch) {
-    const resInfo = RESOURCE_MAPPING[exchMatch[2]];
-    return { pdv, isExchange: true, isCombat: false, resourceKey: resInfo?.key, resourceAmount: +exchMatch[1] };
+  
+  const exchangeMatch = text.match(/Echanger (\d+) \[(.+?)\] contre/);
+  if (exchangeMatch) {
+    const resourceInfo = RESOURCE_MAPPING[exchangeMatch[2]];
+    return {
+      pdv, isExchange: true, isCombat: false,
+      resourceKey: resourceInfo?.key,
+      resourceDisplayName: resourceInfo?.displayName,
+      resourceAmount: +exchangeMatch[1]
+    };
   }
-  const combatMatch = text.match(/difficulté (\d+) pour gagner/);
+  
+  const combatMatch = text.match(/difficulté (\d+) en \[(.+?)\]/);
   if (combatMatch) {
-    const statKeys = Object.keys(STAT_NAMES);
-    return { pdv, isExchange: false, isCombat: true, difficulty: +combatMatch[1], stat: statKeys[Math.floor(Math.random() * statKeys.length)] };
+    const statKey = STAT_MAPPING[combatMatch[2]];
+    return {
+      pdv, isExchange: false, isCombat: true,
+      difficulty: +combatMatch[1],
+      stat: statKey,
+      statName: combatMatch[2]
+    };
   }
+  
   return { pdv, isExchange: false, isCombat: false };
 }
 
-function countTerritoriesByBiome(territories) {
-  const c = { FORET: 0, DESERT: 0, MONTAGNE: 0 };
-  (territories || []).forEach(t => { if (c[t.biome] !== undefined) c[t.biome]++; });
-  return c;
-}
 
-// App Principal
+// ============================================================================
+// APP PRINCIPAL
+// ============================================================================
 function App() {
   const [screen, setScreen] = useState("menu");
   const [user, setUser] = useState(null);
@@ -210,7 +266,7 @@ function App() {
     if (!auth) { setLoading(false); setUser({ uid: "local_" + Date.now() }); return; }
     const unsub = auth.onAuthStateChanged((u) => {
       if (u) { setUser({ uid: u.uid }); setLoading(false); }
-      else auth.signInAnonymously().then(() => setLoading(false)).catch(e => { console.error(e); setLoading(false); });
+      else auth.signInAnonymously().then(() => setLoading(false)).catch(() => setLoading(false));
     });
     return () => unsub();
   }, []);
@@ -220,7 +276,10 @@ function App() {
     const ref = database.ref("games/" + gameId);
     const cb = ref.on("value", (snap) => {
       const d = snap.val();
-      if (d) { setGame(d); if (d.status === "playing" && screen === "lobby") setScreen("game"); }
+      if (d) {
+        setGame(d);
+        if (d.status === "playing" && screen === "lobby") setScreen("game");
+      }
     });
     return () => ref.off("value", cb);
   }, [gameId, screen]);
@@ -231,9 +290,9 @@ function App() {
     if (!playerName.trim()) return notify("Entrez votre nom", "error");
     const code = genCode();
     const newGame = {
-      code: code, hostId: user.uid, status: "waiting",
+      code, hostId: user.uid, status: "waiting",
       players: { [user.uid]: { oderId: user.uid, name: playerName.trim(), isHost: true, charKey: null, stats: null } },
-      turnOrder: [], currentTurn: 0, drawnAnomalies: [], drawnQuetes: [], completedObjectives: [], createdAt: Date.now()
+      turnOrder: [], currentTurn: 0, drawnAnomalies: [], drawnQuetes: [], createdAt: Date.now()
     };
     if (database) await database.ref("games/" + code).set(newGame);
     setGameId(code);
@@ -255,8 +314,8 @@ function App() {
     setScreen("lobby");
   };
 
-  if (loading) return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center" },
-    React.createElement("div", { className: "w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" })
+  if (loading) return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center" },
+    React.createElement("div", { className: "w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" })
   );
 
   return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100" },
@@ -269,15 +328,14 @@ function App() {
   );
 }
 
-// Menu Screen
+// ============================================================================
+// MENU SCREEN
+// ============================================================================
 function MenuScreen({ playerName, setPlayerName, setScreen }) {
-  return React.createElement("div", { className: "min-h-screen flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-2xl shadow-xl p-8 max-w-md w-full" },
-      React.createElement("div", { className: "text-center mb-8" },
-        React.createElement("div", { className: "text-5xl mb-4" }, "🎲"),
-        React.createElement("h1", { className: "text-3xl font-bold text-gray-800 mb-2" }, "Quêtes d'Anomalies"),
-        React.createElement("p", { className: "text-gray-600" }, "Multijoueur temps réel")
-      ),
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center p-6" },
+    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full" },
+      React.createElement("h1", { className: "text-4xl font-bold text-center mb-2 text-gray-800" }, "Quêtes d'Anomalies"),
+      React.createElement("p", { className: "text-center text-gray-600 mb-8" }, "Multijoueur temps réel"),
       React.createElement("div", { className: "mb-6" },
         React.createElement("label", { className: "block text-sm font-semibold text-gray-700 mb-2" }, "Votre pseudo"),
         React.createElement("input", { type: "text", className: "w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none text-lg", placeholder: "Entrez votre nom...", value: playerName, onChange: (e) => setPlayerName(e.target.value), maxLength: 16 })
@@ -291,10 +349,12 @@ function MenuScreen({ playerName, setPlayerName, setScreen }) {
   );
 }
 
-// Create Screen
+// ============================================================================
+// CREATE/JOIN SCREENS
+// ============================================================================
 function CreateScreen({ playerName, setPlayerName, createGame, setScreen }) {
-  return React.createElement("div", { className: "min-h-screen flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-2xl shadow-xl p-8 max-w-md w-full" },
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center p-6" },
+    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full" },
       React.createElement("button", { className: "mb-6 text-purple-600 font-semibold", onClick: () => setScreen("menu") }, "← Retour"),
       React.createElement("h2", { className: "text-2xl font-bold text-center mb-6" }, "🎮 Créer une partie"),
       React.createElement("div", { className: "mb-6" },
@@ -306,10 +366,9 @@ function CreateScreen({ playerName, setPlayerName, createGame, setScreen }) {
   );
 }
 
-// Join Screen
 function JoinScreen({ playerName, setPlayerName, joinCode, setJoinCode, joinGame, setScreen }) {
-  return React.createElement("div", { className: "min-h-screen flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-2xl shadow-xl p-8 max-w-md w-full" },
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center p-6" },
+    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full" },
       React.createElement("button", { className: "mb-6 text-purple-600 font-semibold", onClick: () => setScreen("menu") }, "← Retour"),
       React.createElement("h2", { className: "text-2xl font-bold text-center mb-6" }, "🔗 Rejoindre"),
       React.createElement("div", { className: "mb-4" },
@@ -325,7 +384,9 @@ function JoinScreen({ playerName, setPlayerName, joinCode, setJoinCode, joinGame
   );
 }
 
-// Lobby Screen
+// ============================================================================
+// LOBBY SCREEN
+// ============================================================================
 function LobbyScreen({ gameId, game, user, setScreen, notify }) {
   if (!game) return React.createElement("div", { className: "min-h-screen flex items-center justify-center" },
     React.createElement("div", { className: "w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" })
@@ -349,25 +410,25 @@ function LobbyScreen({ gameId, game, user, setScreen, notify }) {
     Object.entries(game.players).forEach(([uid, p], i) => {
       const ch = CHARACTERS[p.charKey];
       order.push(uid);
+      const startGold = ch.startGoldBonus ? 10 + ch.startGoldBonus : 10;
       init[uid] = {
         ...p, index: i, character: ch, characterKey: p.charKey,
-        pvCurrent: ch.pvMax, or: rulesEngine.getStartGold(p.charKey),
-        cuivre: 0, argent: 0, obsidienne: 0, pdv: 0, pdvHistory: [],
-        territories: [], defeatedBosses: [], effects: [], quests: [],
-        skills: ch.skills.map((s, idx) => ({ id: "skill_" + idx, description: s })),
-        usedAttackDice: false, rerollAvailable: true,
-        blessAvailable: p.charKey === 'VICAIRE', curseAvailable: p.charKey === 'HERETIQUE'
+        pvCurrent: ch.pvMax, or: startGold, cuivre: 0, argent: 0, obsidienne: 0,
+        pdv: 0, tourPlateau: 0,
+        effects: [], quests: [],
+        skills: ch.skills.map((s, idx) => ({ id: "skill_" + idx, description: s, status: 'AVAILABLE' })),
+        usedAttackDice: false, blessAvailable: ch.canBless || false, curseAvailable: ch.canCurse || false
       };
     });
-    if (database) database.ref("games/" + gameId).update({ status: "playing", players: init, turnOrder: order, currentTurn: 0, targetPdv: order.length * 10 });
+    if (database) database.ref("games/" + gameId).update({ status: "playing", players: init, turnOrder: order, currentTurn: 0 });
   };
 
-  const copyCode = () => { 
+  const copyCode = () => {
     if (navigator.clipboard) navigator.clipboard.writeText(gameId);
-    notify("Code copié !", "success"); 
+    notify("Code copié !", "success");
   };
 
-  return React.createElement("div", { className: "min-h-screen p-4" },
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 p-4" },
     React.createElement("div", { className: "max-w-2xl mx-auto" },
       React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-4" },
         React.createElement("h3", { className: "text-center text-gray-600 text-sm mb-2" }, "Code de la partie"),
@@ -379,7 +440,7 @@ function LobbyScreen({ gameId, game, user, setScreen, notify }) {
         players.map(p => {
           const isMe = p.oderId === user.uid;
           const ready = p.charKey && p.stats;
-          return React.createElement("div", { key: p.oderId, className: "flex items-center gap-3 p-3 rounded-xl mb-2 " + (isMe ? 'bg-purple-50 border-2 border-purple-400' : 'bg-gray-50') + (ready ? ' border-green-400' : '') },
+          return React.createElement("div", { key: p.oderId, className: "flex items-center gap-3 p-3 rounded-xl mb-2 " + (isMe ? 'bg-purple-50 border-2 border-purple-400' : 'bg-gray-50') },
             React.createElement("div", { className: "w-12 h-12 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center text-2xl" }, p.charKey ? CHARACTERS[p.charKey].emoji : "👤"),
             React.createElement("div", { className: "flex-1" },
               React.createElement("div", { className: "font-semibold text-gray-800 flex items-center gap-2" }, p.name,
@@ -411,14 +472,16 @@ function LobbyScreen({ gameId, game, user, setScreen, notify }) {
           })
         )
       ),
-      me && me.charKey && !me.stats && React.createElement(StatsAlloc, { gameId, userId: user.uid, character: CHARACTERS[me.charKey], notify }),
+      me && me.charKey && !me.stats && React.createElement(StatsAlloc, { gameId, oderId: user.uid, character: CHARACTERS[me.charKey], notify }),
       isHost && React.createElement("button", { className: "w-full py-4 rounded-xl font-bold text-lg transition-all " + (allReady ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'), onClick: startGame, disabled: !allReady }, allReady ? "🚀 Lancer la partie !" : "En attente (" + players.filter(p => p.charKey && p.stats).length + "/" + players.length + ")")
     )
   );
 }
 
-// Stats Allocation
-function StatsAlloc({ gameId, userId, character, notify }) {
+// ============================================================================
+// STATS ALLOCATION
+// ============================================================================
+function StatsAlloc({ gameId, oderId, character, notify }) {
   const MODIFIERS = [-2, -1, 0, 0, 1, 2];
   const [allocation, setAllocation] = useState({ endurance: null, force: null, vitesse: null, perception: null, sagesse: null, intelligence: null });
 
@@ -437,12 +500,12 @@ function StatsAlloc({ gameId, userId, character, notify }) {
 
   const confirmStats = () => {
     if (!isValid) return;
-    if (database) database.ref("games/" + gameId + "/players/" + userId + "/stats").set(allocation);
+    if (database) database.ref("games/" + gameId + "/players/" + oderId + "/stats").set(allocation);
     notify("Stats enregistrées !", "success");
   };
 
   return React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-4" },
-    React.createElement("h3", { className: "font-bold text-gray-800 mb-2" }, "Répartissez vos stats"),
+    React.createElement("h3", { className: "font-bold text-gray-800 mb-2" }, "Répartissez vos stats pour " + character.name),
     React.createElement("p", { className: "text-gray-600 text-sm mb-4" }, "Assignez: -2, -1, 0, 0, +1, +2"),
     React.createElement("div", { className: "space-y-4" },
       Object.entries(STAT_NAMES).map(([key, name]) => {
@@ -466,12 +529,11 @@ function StatsAlloc({ gameId, userId, character, notify }) {
   );
 }
 
-// Game Screen
+// ============================================================================
+// GAME SCREEN
+// ============================================================================
 function GameScreen({ gameId, game, user, notify }) {
-  const [activeTab, setActiveTab] = useState('tirages');
-  const [showDeath, setShowDeath] = useState(false);
-  const [showStart, setShowStart] = useState(false);
-  const [startGains, setStartGains] = useState({});
+  const [activeTab, setActiveTab] = useState('anomalie');
 
   if (!game || !game.players || !game.turnOrder) {
     return React.createElement("div", { className: "min-h-screen flex items-center justify-center" },
@@ -486,566 +548,910 @@ function GameScreen({ gameId, game, user, notify }) {
   const me = game.players[user.uid];
   const isMyTurn = curUid === user.uid;
   const players = order.map(uid => game.players[uid]).filter(Boolean);
-  const totalPdv = players.reduce((s, p) => s + (p.pdv || 0), 0);
-  const targetPdv = game.targetPdv || players.length * 10;
 
   const updateMe = (updates) => database ? database.ref("games/" + gameId + "/players/" + user.uid).update(updates) : null;
+  const updatePlayer = (uid, updates) => database ? database.ref("games/" + gameId + "/players/" + uid).update(updates) : null;
   const updateGame = (updates) => database ? database.ref("games/" + gameId).update(updates) : null;
-  const addPdv = (amount, source) => {
-    const newPdv = (me.pdv || 0) + amount;
-    const newHistory = [...(me.pdvHistory || []), { id: Date.now(), amount, source }];
-    return updateMe({ pdv: newPdv, pdvHistory: newHistory });
-  };
 
   const nextTurn = () => {
     if (!isMyTurn) return;
     const next = (curIdx + 1) % order.length;
-    updateMe({ usedAttackDice: false, rerollAvailable: true });
+    updateMe({ usedAttackDice: false });
     updateGame({ currentTurn: next });
-    notify("Tour passé !", "success");
+    notify("Tour terminé !", "success");
   };
 
-  const handlePassStart = () => {
-    const bonus = rulesEngine.getPassBonus(me);
-    const tc = countTerritoriesByBiome(me.territories);
-    setStartGains({ or: bonus.or || 0, cuivre: tc.FORET, argent: tc.DESERT, obsidienne: tc.MONTAGNE });
-    setShowStart(true);
-  };
-
-  const confirmStart = () => {
-    const bonus = rulesEngine.getPassBonus(me);
-    const tc = countTerritoriesByBiome(me.territories);
-    updateMe({
-      or: (me.or || 0) + (bonus.or || 0),
-      cuivre: (me.cuivre || 0) + tc.FORET,
-      argent: (me.argent || 0) + tc.DESERT,
-      obsidienne: (me.obsidienne || 0) + tc.MONTAGNE,
-      blessAvailable: me.characterKey === 'VICAIRE',
-      curseAvailable: me.characterKey === 'HERETIQUE'
-    });
-    addPdv(1, 'START');
-    setShowStart(false);
-  };
-
-  useEffect(() => { if (me && me.pvCurrent <= 0 && !showDeath) setShowDeath(true); }, [me?.pvCurrent]);
-
-  const handleDeath = () => { updateMe({ pvCurrent: me.character.pvMax, effects: [] }); setShowDeath(false); };
-
-  if (showDeath) {
-    return React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4" },
-      React.createElement("div", { className: "bg-gradient-to-br from-red-800 to-gray-900 rounded-2xl p-8 max-w-md w-full text-white text-center" },
-        React.createElement("div", { className: "text-6xl mb-4" }, "💀"),
-        React.createElement("h2", { className: "text-3xl font-bold mb-4" }, "MORT !"),
-        React.createElement("p", { className: "mb-6" }, "PV restaurés, états retirés"),
-        React.createElement("button", { onClick: handleDeath, className: "px-8 py-3 bg-red-600 rounded-xl font-bold" }, "Ressusciter")
-      )
-    );
-  }
-
-  if (showStart) {
-    return React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4" },
-      React.createElement("div", { className: "bg-gradient-to-br from-teal-600 to-blue-700 rounded-2xl p-8 max-w-md w-full text-white text-center" },
-        React.createElement("div", { className: "text-6xl mb-4" }, "🏁"),
-        React.createElement("h2", { className: "text-3xl font-bold mb-4" }, "PASSAGE DÉPART !"),
-        React.createElement("div", { className: "bg-white bg-opacity-20 rounded-xl p-4 mb-6 space-y-2" },
-          React.createElement("div", null, "🏆 +1 PDV"),
-          startGains.or > 0 && React.createElement("div", null, "💰 +" + startGains.or + " Or"),
-          startGains.cuivre > 0 && React.createElement("div", null, "🌳 +" + startGains.cuivre + " Cuivre"),
-          startGains.argent > 0 && React.createElement("div", null, "🏜️ +" + startGains.argent + " Argent"),
-          startGains.obsidienne > 0 && React.createElement("div", null, "⛰️ +" + startGains.obsidienne + " Obsidienne")
-        ),
-        React.createElement("button", { onClick: confirmStart, className: "px-8 py-3 bg-white text-teal-700 rounded-xl font-bold" }, "Continuer")
-      )
-    );
-  }
+  // Death check
+  useEffect(() => {
+    if (me && me.pvCurrent <= 0) {
+      alert(me.name + " est mort ! Retour à la case départ avec PV max.");
+      updateMe({ pvCurrent: me.character.pvMax, effects: [] });
+    }
+  }, [me?.pvCurrent]);
 
   const tabs = [
-    { id: "tirages", label: "Tirages" }, { id: "de", label: "Dé" }, { id: "attaque", label: "Attaque" },
-    { id: "objectif", label: "Objectif" }, { id: "echange", label: "Échange" },
-    { id: "personnage", label: "Perso" }, { id: "pdv", label: "PDV" }
+    { id: "anomalie", label: "Anomalie" },
+    { id: "quete", label: "Quête" },
+    { id: "statistique", label: "Stat" },
+    { id: "de", label: "Dé" },
+    { id: "personnage", label: "Perso" }
   ];
 
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 flex flex-col pb-24" },
-    React.createElement("div", { className: "p-4 text-white " + (isMyTurn ? 'bg-gradient-to-r from-green-600 to-teal-600' : 'bg-gradient-to-r from-orange-500 to-red-500') },
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 flex flex-col" },
+    // Header
+    React.createElement("div", { className: "bg-gradient-to-r " + (isMyTurn ? "from-green-600 to-teal-600" : "from-purple-600 to-blue-600") + " text-white shadow-lg p-4" },
       React.createElement("div", { className: "max-w-4xl mx-auto" },
-        React.createElement("div", { className: "text-sm font-bold mb-1" }, isMyTurn ? "🎯 C'EST VOTRE TOUR !" : "⏳ Tour de " + (curPlayer?.name || '?')),
-        React.createElement("div", { className: "flex justify-between items-center" },
+        React.createElement("div", { className: "text-sm font-semibold mb-1" }, isMyTurn ? "🎯 C'EST VOTRE TOUR !" : "Tour de " + (curPlayer?.name || "?")),
+        React.createElement("div", { className: "flex items-center justify-between" },
           React.createElement("div", null,
-            React.createElement("div", { className: "text-xl font-bold" }, me?.name),
-            React.createElement("div", { className: "text-sm opacity-90" }, me?.character?.name)
+            React.createElement("h2", { className: "text-2xl font-bold" }, me?.name),
+            React.createElement("p", { className: "text-sm opacity-90" }, me?.character?.name)
           ),
           React.createElement("div", { className: "text-right" },
-            React.createElement("div", { className: "text-2xl font-bold" }, (me?.pvCurrent || 0) + "/" + (me?.character?.pvMax || 0)),
-            React.createElement("div", { className: "text-xs" }, "PV")
+            React.createElement("div", { className: "text-3xl font-bold" }, (me?.pvCurrent || 0) + "/" + (me?.character?.pvMax || 0)),
+            React.createElement("div", { className: "text-xs" }, "Points de Vie")
           )
         ),
         React.createElement("div", { className: "flex gap-2 mt-2 text-xs flex-wrap" },
-          React.createElement("span", { className: "bg-white bg-opacity-20 px-2 py-1 rounded" }, "💰 " + (me?.or || 0)),
+          React.createElement("span", { className: "bg-white bg-opacity-20 px-2 py-1 rounded" }, "🪙 " + (me?.or || 0)),
           React.createElement("span", { className: "bg-white bg-opacity-20 px-2 py-1 rounded" }, "🌳 " + (me?.cuivre || 0)),
           React.createElement("span", { className: "bg-white bg-opacity-20 px-2 py-1 rounded" }, "🏜️ " + (me?.argent || 0)),
           React.createElement("span", { className: "bg-white bg-opacity-20 px-2 py-1 rounded" }, "⛰️ " + (me?.obsidienne || 0)),
-          React.createElement("span", { className: "bg-yellow-400 text-yellow-900 px-2 py-1 rounded font-bold" }, "🏆 " + (me?.pdv || 0))
+          React.createElement("span", { className: "bg-yellow-400 text-yellow-900 px-2 py-1 rounded font-bold" }, "🏆 " + (me?.pdv || 0) + " PDV")
         )
       )
     ),
-    React.createElement("div", { className: "bg-white shadow px-4 py-2" },
-      React.createElement("div", { className: "max-w-4xl mx-auto" },
-        React.createElement("div", { className: "flex justify-between text-xs text-gray-600 mb-1" },
-          React.createElement("span", null, "Progression"),
-          React.createElement("span", null, totalPdv + " / " + targetPdv + " PDV")
+    // Tabs
+    React.createElement("div", { className: "bg-white shadow-md" },
+      React.createElement("div", { className: "max-w-4xl mx-auto overflow-x-auto" },
+        React.createElement("div", { className: "flex" },
+          tabs.map(t => React.createElement("button", { key: t.id, onClick: () => setActiveTab(t.id), className: "flex-shrink-0 px-6 py-3 font-semibold transition-colors border-b-4 " + (activeTab === t.id ? 'bg-blue-600 text-white border-blue-800' : 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200') }, t.label))
+        )
+      )
+    ),
+    // Content
+    React.createElement("div", { className: "flex-1 overflow-y-auto" },
+      React.createElement("div", { className: "max-w-4xl mx-auto p-6" },
+        React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-6" },
+          activeTab === 'anomalie' && React.createElement(AnomalieTab, { me, isMyTurn, updateMe, notify, game, updateGame }),
+          activeTab === 'quete' && React.createElement(QueteTab, { me, isMyTurn, updateMe, notify, game, updateGame }),
+          activeTab === 'statistique' && React.createElement(StatistiqueTab, null),
+          activeTab === 'de' && React.createElement(DeTab, { me, isMyTurn, updateMe, notify, game, updateGame, updatePlayer, players, user }),
+          activeTab === 'personnage' && React.createElement(PersonnageTab, { me, updateMe, notify, gameId, user })
         ),
-        React.createElement("div", { className: "h-2 bg-gray-200 rounded-full overflow-hidden" },
-          React.createElement("div", { className: "h-full bg-gradient-to-r from-purple-600 to-blue-600 rounded-full", style: { width: Math.min(100, (totalPdv / targetPdv) * 100) + "%" } })
+        // End turn button
+        React.createElement("div", { className: "grid grid-cols-1 gap-4" },
+          React.createElement("button", { onClick: nextTurn, disabled: !isMyTurn, className: "py-4 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl font-bold text-lg hover:from-green-700 hover:to-teal-700 transition-colors shadow-lg disabled:opacity-50" }, "✓ Fin du tour")
         )
-      )
-    ),
-    React.createElement("div", { className: "bg-white shadow-md overflow-x-auto" },
-      React.createElement("div", { className: "flex max-w-4xl mx-auto" },
-        tabs.map(t => React.createElement("button", { key: t.id, onClick: () => setActiveTab(t.id), className: "flex-shrink-0 px-4 py-3 font-semibold text-sm border-b-4 " + (activeTab === t.id ? 'bg-purple-600 text-white border-purple-800' : 'bg-gray-100 text-gray-600 border-transparent hover:bg-gray-200') }, t.label))
-      )
-    ),
-    React.createElement("div", { className: "flex-1 overflow-y-auto p-4" },
-      React.createElement("div", { className: "max-w-4xl mx-auto" },
-        React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6" },
-          activeTab === 'tirages' && React.createElement(TiragesTab, { me, isMyTurn, updateMe, notify, game, updateGame }),
-          activeTab === 'de' && React.createElement(DeTab, { me, isMyTurn, updateMe, notify }),
-          activeTab === 'attaque' && React.createElement(AttaqueTab, { me, isMyTurn, updateMe, notify, game, addPdv }),
-          activeTab === 'objectif' && React.createElement(ObjectifTab, { me, isMyTurn, updateMe, notify, game, updateGame, addPdv }),
-          activeTab === 'echange' && React.createElement(EchangeTab, { me, isMyTurn, updateMe, notify }),
-          activeTab === 'personnage' && React.createElement(PersonnageTab, { me, updateMe, handlePassStart, isMyTurn }),
-          activeTab === 'pdv' && React.createElement(PdvTab, { me, players })
-        )
-      )
-    ),
-    isMyTurn && React.createElement("div", { className: "fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg border-t" },
-      React.createElement("div", { className: "max-w-4xl mx-auto" },
-        React.createElement("button", { className: "w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-xl font-bold text-lg", onClick: nextTurn }, "✅ Fin de mon tour")
       )
     )
   );
 }
 
-// Tirages Tab
-function TiragesTab({ me, isMyTurn, updateMe, notify, game, updateGame }) {
-  const [anomCard, setAnomCard] = useState(null);
-  const [questCard, setQuestCard] = useState(null);
-  const [applied, setApplied] = useState(null);
+// ============================================================================
+// ANOMALIE TAB
+// ============================================================================
+function AnomalieTab({ me, isMyTurn, updateMe, notify, game, updateGame }) {
+  const [currentCard, setCurrentCard] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [appliedEffect, setAppliedEffect] = useState(null);
 
-  const drawAnomaly = () => {
+  const drawCard = () => {
     if (!isMyTurn) return notify("Pas votre tour", "error");
+    
     const drawn = game.drawnAnomalies || [];
-    const available = ANOMALIES.filter((_, i) => !drawn.includes(i));
-    if (available.length === 0) return notify("Deck vide !", "error");
-    const idx = Math.floor(Math.random() * available.length);
-    const card = available[idx];
-    const origIdx = ANOMALIES.indexOf(card);
-    updateGame({ drawnAnomalies: [...drawn, origIdx] });
-    setAnomCard(card);
-    const effect = parseAnomaly(card);
-    let msg = "";
-    if (effect.type === 'heal') { updateMe({ pvCurrent: Math.min(me.character.pvMax, me.pvCurrent + effect.amount) }); msg = "+" + effect.amount + " PV"; }
-    else if (effect.type === 'damage') { updateMe({ pvCurrent: Math.max(0, me.pvCurrent - effect.amount) }); msg = "-" + effect.amount + " PV"; }
-    else if (effect.type === 'bless') { updateMe({ effects: [...(me.effects || []), { id: Date.now(), type: 'BLESS', stat: effect.stat, delta: 2, name: "Bénédiction " + STAT_NAMES[effect.stat] }] }); msg = "Bénédiction " + STAT_NAMES[effect.stat]; }
-    else if (effect.type === 'curse') { updateMe({ effects: [...(me.effects || []), { id: Date.now(), type: 'CURSE', stat: effect.stat, delta: -2, name: "Malédiction " + STAT_NAMES[effect.stat] }] }); msg = "Malédiction " + STAT_NAMES[effect.stat]; }
-    else if (effect.type === 'gain') { updateMe({ [effect.resource]: (me[effect.resource] || 0) + effect.amount }); msg = "+" + effect.amount + " " + effect.resource; }
-    else if (effect.type === 'lose') { updateMe({ [effect.resource]: Math.max(0, (me[effect.resource] || 0) - effect.amount) }); msg = "-" + effect.amount + " " + effect.resource; }
-    else if (effect.type === 'recharge') { updateMe({ blessAvailable: me.characterKey === 'VICAIRE', curseAvailable: me.characterKey === 'HERETIQUE' }); msg = "Pouvoirs rechargés !"; }
-    setApplied(msg);
-  };
+    const availableCards = ANOMALIES.filter((_, index) => !drawn.includes(index));
+    if (availableCards.length === 0) return notify("Toutes les anomalies ont été tirées !", "error");
 
-  const drawQuest = () => {
-    if (!isMyTurn) return notify("Pas votre tour", "error");
-    if ((me.quests || []).length >= 2) return notify("Max 2 quêtes !", "error");
-    const drawn = game.drawnQuetes || [];
-    const available = QUETES.filter((_, i) => !drawn.includes(i));
-    if (available.length === 0) return notify("Deck vide !", "error");
-    const idx = Math.floor(Math.random() * available.length);
-    const card = available[idx];
-    const origIdx = QUETES.indexOf(card);
-    updateGame({ drawnQuetes: [...drawn, origIdx] });
-    setQuestCard(card);
-    updateMe({ quests: [...(me.quests || []), { id: Date.now(), text: card }] });
-  };
+    setIsAnimating(true);
+    setCurrentCard(null);
+    setAppliedEffect(null);
 
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "🎴 Tirages"),
-    React.createElement("div", null,
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "Anomalie (" + (ANOMALIES.length - (game.drawnAnomalies || []).length) + " restantes)"),
-      React.createElement("div", { className: "min-h-32 bg-gradient-to-r from-purple-600 to-purple-800 rounded-xl p-6 flex items-center justify-center text-white mb-3" },
-        anomCard ? React.createElement("div", { className: "text-center" }, React.createElement("p", { className: "font-medium" }, anomCard), applied && React.createElement("p", { className: "text-yellow-300 font-bold mt-2" }, "✨ " + applied)) : React.createElement("p", { className: "text-purple-200 italic" }, "Tirez une carte...")
-      ),
-      React.createElement("button", { onClick: drawAnomaly, disabled: !isMyTurn, className: "w-full py-3 bg-purple-600 text-white rounded-xl font-semibold disabled:opacity-50" }, "🔮 Tirer Anomalie")
-    ),
-    React.createElement("div", null,
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "Quête (" + (me.quests || []).length + "/2 | " + (QUETES.length - (game.drawnQuetes || []).length) + " restantes)"),
-      React.createElement("div", { className: "min-h-32 bg-gradient-to-r from-green-600 to-green-800 rounded-xl p-6 flex items-center justify-center text-white mb-3" },
-        questCard ? React.createElement("p", { className: "font-medium text-center" }, questCard) : React.createElement("p", { className: "text-green-200 italic" }, "Tirez une quête...")
-      ),
-      React.createElement("button", { onClick: drawQuest, disabled: !isMyTurn || (me.quests || []).length >= 2, className: "w-full py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50" }, (me.quests || []).length >= 2 ? "Maximum atteint" : "📜 Tirer Quête")
-    ),
-    (me.quests || []).length > 0 && React.createElement("div", null,
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "Mes quêtes"),
-      React.createElement("div", { className: "space-y-2" }, (me.quests || []).map(q => React.createElement("div", { key: q.id, className: "bg-gray-50 rounded-lg p-3 text-sm" }, q.text)))
-    )
-  );
-}
-
-// De Tab
-function DeTab({ me, isMyTurn, updateMe, notify }) {
-  const [moveResult, setMoveResult] = useState(null);
-  const [attackResult, setAttackResult] = useState(null);
-  const [rolling, setRolling] = useState(false);
-  const [showReroll, setShowReroll] = useState(false);
-
-  const rollMove = () => { if (!isMyTurn) return notify("Pas votre tour", "error"); setRolling(true); setTimeout(() => { setMoveResult(Math.floor(Math.random() * 10) + 1); setRolling(false); }, 500); };
-
-  const rollAttack = () => {
-    if (!isMyTurn) return notify("Pas votre tour", "error");
-    if (me.usedAttackDice) return notify("Déjà utilisé ce tour", "error");
-    setRolling(true);
     setTimeout(() => {
-      const statIdx = Math.floor(Math.random() * STATISTIQUES.length);
-      const stat = STATISTIQUES[statIdx];
-      const statKey = STAT_MAPPING[stat] || stat.toLowerCase();
-      const dice = Math.floor(Math.random() * 10) + 1;
-      const base = me.stats?.[statKey] || 0;
-      const effects = (me.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
-      const total = dice + base + effects;
-      setAttackResult({ stat, statKey, dice, base, effects, total, crit: dice === 10 });
-      if (me.characterKey === 'VICAIRE' && me.rerollAvailable) setShowReroll(true);
-      else updateMe({ usedAttackDice: true });
-      setRolling(false);
-    }, 500);
+      const randomIndex = Math.floor(Math.random() * availableCards.length);
+      const selectedCard = availableCards[randomIndex];
+      const originalIndex = ANOMALIES.indexOf(selectedCard);
+
+      updateGame({ drawnAnomalies: [...drawn, originalIndex] });
+      setCurrentCard(selectedCard);
+      setIsAnimating(false);
+
+      const effect = parseAnomaly(selectedCard);
+      applyEffect(effect);
+    }, 300);
   };
 
-  const handleReroll = (accept) => {
-    if (accept) {
-      const resource = getRandomAvailableResource(me);
-      if (!resource) { notify("Pas de ressource !", "error"); updateMe({ usedAttackDice: true }); setShowReroll(false); return; }
-      const stats = STATISTIQUES.filter(s => (STAT_MAPPING[s] || s.toLowerCase()) !== attackResult.statKey);
-      const newStat = stats[Math.floor(Math.random() * stats.length)];
-      const newKey = STAT_MAPPING[newStat] || newStat.toLowerCase();
-      const base = me.stats?.[newKey] || 0;
-      const effects = (me.effects || []).filter(e => e.stat === newKey).reduce((s, e) => s + e.delta, 0);
-      const total = attackResult.dice + base + effects;
-      setAttackResult({ ...attackResult, stat: newStat, statKey: newKey, base, effects, total, rerolled: true });
-      updateMe({ usedAttackDice: true, rerollAvailable: false, [resource]: Math.max(0, (me[resource] || 0) - 1) });
-      notify("Relance ! -1 " + resource, "success");
-    } else updateMe({ usedAttackDice: true });
-    setShowReroll(false);
-  };
-
-  if (showReroll) return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-xl font-bold text-center" }, "🔄 Relance Vicaire"),
-    React.createElement("p", { className: "text-center text-gray-600" }, "Changer la statistique ? (coût: 1 ressource)"),
-    React.createElement("div", { className: "bg-purple-100 rounded-xl p-4 text-center" }, React.createElement("div", { className: "text-lg font-bold text-purple-600" }, attackResult?.stat), React.createElement("div", { className: "text-4xl font-bold" }, attackResult?.total)),
-    React.createElement("div", { className: "flex gap-3" }, React.createElement("button", { onClick: () => handleReroll(true), className: "flex-1 py-3 bg-green-600 text-white rounded-xl font-bold" }, "✅ Oui"), React.createElement("button", { onClick: () => handleReroll(false), className: "flex-1 py-3 bg-gray-400 text-white rounded-xl font-bold" }, "❌ Non"))
-  );
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "🎲 Dés"),
-    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "Déplacement"),
-      React.createElement("div", { className: "min-h-32 bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-6 flex flex-col items-center justify-center text-white mb-3 " + (rolling ? 'animate-pulse' : '') },
-        moveResult !== null ? React.createElement(React.Fragment, null, React.createElement("div", { className: "text-6xl font-bold" }, moveResult), moveResult === 10 && React.createElement("div", { className: "text-yellow-300 font-bold mt-2" }, "✨ Critique !")) : React.createElement("p", { className: "text-blue-200" }, "Lancez le dé")
-      ),
-      React.createElement("button", { onClick: rollMove, disabled: !isMyTurn || rolling, className: "w-full py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50" }, "🎲 Lancer (1-10)")
-    ),
-    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "Attaque"),
-      me.usedAttackDice && React.createElement("div", { className: "bg-yellow-100 border border-yellow-400 rounded-lg p-2 mb-3 text-center text-sm text-yellow-800" }, "⚠️ Déjà utilisé"),
-      React.createElement("div", { className: "min-h-40 bg-gradient-to-r from-red-600 to-red-800 rounded-xl p-6 flex flex-col items-center justify-center text-white mb-3 " + (rolling ? 'animate-pulse' : '') },
-        attackResult ? React.createElement("div", { className: "text-center w-full" },
-          React.createElement("div", { className: "text-yellow-300 font-bold text-xl mb-2" }, attackResult.stat + (attackResult.rerolled ? " 🔄" : "")),
-          React.createElement("div", { className: "text-5xl font-bold mb-3" }, attackResult.total),
-          attackResult.crit && React.createElement("div", { className: "text-yellow-300 font-bold" }, "✨ Critique !"),
-          React.createElement("div", { className: "bg-white bg-opacity-20 rounded-lg p-3 mt-2 text-sm" },
-            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "Dé:"), React.createElement("span", { className: "font-bold" }, attackResult.dice)),
-            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "Base:"), React.createElement("span", { className: "font-bold" }, attackResult.base >= 0 ? "+" + attackResult.base : attackResult.base)),
-            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "États:"), React.createElement("span", { className: "font-bold " + (attackResult.effects >= 0 ? 'text-green-300' : 'text-red-300') }, attackResult.effects >= 0 ? "+" + attackResult.effects : attackResult.effects))
-          )
-        ) : React.createElement("p", { className: "text-red-200" }, "Lancez le dé")
-      ),
-      React.createElement("button", { onClick: rollAttack, disabled: !isMyTurn || rolling || me.usedAttackDice, className: "w-full py-3 bg-red-600 text-white rounded-xl font-semibold disabled:opacity-50" }, "⚔️ Lancer Attaque")
-    )
-  );
-}
-
-// Attaque Tab
-function AttaqueTab({ me, isMyTurn, updateMe, notify, game, addPdv }) {
-  const [selectedBiome, setSelectedBiome] = useState(null);
-  const [selectedDiff, setSelectedDiff] = useState(null);
-  const [result, setResult] = useState(null);
-
-  const attackTerritory = () => {
-    if (!isMyTurn) return notify("Pas votre tour", "error");
-    if (me.usedAttackDice) return notify("Dé déjà utilisé", "error");
-    if (!selectedBiome || !selectedDiff) return notify("Sélectionnez biome et difficulté", "error");
-    const statKeys = Object.keys(STAT_NAMES);
-    const statKey = statKeys[Math.floor(Math.random() * statKeys.length)];
-    const dice = Math.floor(Math.random() * 10) + 1;
-    const base = me.stats?.[statKey] || 0;
-    const effects = (me.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
-    const bonus = rulesEngine.getAttackBonus(me, { type: 'TERRITORY', isNeutral: true });
-    const total = dice + base + effects + bonus.bonus;
-    const success = total >= selectedDiff;
-    const pdv = selectedDiff === 6 ? 3 : selectedDiff === 8 ? 4 : 5;
-    const resource = BIOMES[selectedBiome].resource;
-    if (success) {
-      const upd = { territories: [...(me.territories || []), { biome: selectedBiome, difficulty: selectedDiff }], usedAttackDice: true, [resource]: (me[resource] || 0) + 1 };
-      const heal = rulesEngine.getHealOnSuccess(me);
-      if (heal > 0) upd.pvCurrent = Math.min(me.character.pvMax, me.pvCurrent + heal);
-      updateMe(upd);
-      addPdv(pdv, 'TERRITORY');
-    } else {
-      const damage = Math.max(1, selectedDiff - total);
-      updateMe({ pvCurrent: Math.max(0, me.pvCurrent - damage), usedAttackDice: true });
+  const applyEffect = (effect) => {
+    let msg = "";
+    if (effect.type === 'heal') {
+      const newPV = Math.min(me.character.pvMax, me.pvCurrent + effect.amount);
+      updateMe({ pvCurrent: newPV });
+      msg = "+" + effect.amount + " PV";
+    } else if (effect.type === 'damage') {
+      const newPV = Math.max(0, me.pvCurrent - effect.amount);
+      updateMe({ pvCurrent: newPV });
+      msg = "-" + effect.amount + " PV";
+    } else if (effect.type === 'bless') {
+      const newEffect = { id: "effect_" + Date.now(), type: 'BLESS', stat: effect.stat, delta: 2, name: "Bénédiction de " + effect.statName };
+      updateMe({ effects: [...(me.effects || []), newEffect] });
+      msg = "Bénédiction " + effect.statName + " (+2)";
+    } else if (effect.type === 'curse') {
+      const newEffect = { id: "effect_" + Date.now(), type: 'CURSE', stat: effect.stat, delta: -2, name: "Malédiction de " + effect.statName };
+      updateMe({ effects: [...(me.effects || []), newEffect] });
+      msg = "Malédiction " + effect.statName + " (-2)";
+    } else if (effect.type === 'gainOr') {
+      updateMe({ or: (me.or || 0) + effect.amount });
+      msg = "+" + effect.amount + " Or";
+    } else if (effect.type === 'loseOr') {
+      updateMe({ or: Math.max(0, (me.or || 0) - effect.amount) });
+      msg = "-" + effect.amount + " Or";
+    } else if (effect.type === 'gainCuivre') {
+      updateMe({ cuivre: (me.cuivre || 0) + effect.amount });
+      msg = "+" + effect.amount + " Cuivre";
+    } else if (effect.type === 'loseCuivre') {
+      updateMe({ cuivre: Math.max(0, (me.cuivre || 0) - effect.amount) });
+      msg = "-" + effect.amount + " Cuivre";
+    } else if (effect.type === 'gainArgent') {
+      updateMe({ argent: (me.argent || 0) + effect.amount });
+      msg = "+" + effect.amount + " Argent";
+    } else if (effect.type === 'loseArgent') {
+      updateMe({ argent: Math.max(0, (me.argent || 0) - effect.amount) });
+      msg = "-" + effect.amount + " Argent";
+    } else if (effect.type === 'gainObsidienne') {
+      updateMe({ obsidienne: (me.obsidienne || 0) + effect.amount });
+      msg = "+" + effect.amount + " Obsidienne";
+    } else if (effect.type === 'loseObsidienne') {
+      updateMe({ obsidienne: Math.max(0, (me.obsidienne || 0) - effect.amount) });
+      msg = "-" + effect.amount + " Obsidienne";
+    } else if (effect.type === 'recharge') {
+      updateMe({ blessAvailable: me.character?.canBless || false, curseAvailable: me.character?.canCurse || false });
+      msg = "Pouvoir rechargé !";
     }
-    setResult({ stat: STAT_NAMES[statKey], dice, base, effects, bonus: bonus.bonus, total, difficulty: selectedDiff, success, pdv, biome: selectedBiome });
+    setAppliedEffect(msg);
   };
 
-  if (result) return React.createElement("div", { className: "space-y-4" },
-    React.createElement("div", { className: "rounded-xl p-6 text-white text-center " + (result.success ? 'bg-gradient-to-r from-green-500 to-teal-500' : 'bg-gradient-to-r from-red-500 to-orange-500') },
-      React.createElement("div", { className: "text-4xl font-bold mb-2" }, result.success ? "✅ VICTOIRE !" : "❌ ÉCHEC"),
-      React.createElement("div", { className: "text-xl mb-2" }, BIOMES[result.biome].emoji + " Diff." + result.difficulty),
-      React.createElement("div", { className: "text-lg mb-4" }, result.total + " vs " + result.difficulty),
-      result.success && React.createElement("div", { className: "text-lg" }, "+" + result.pdv + " PDV !")
-    ),
-    React.createElement("button", { onClick: () => { setResult(null); setSelectedBiome(null); setSelectedDiff(null); }, className: "w-full py-3 bg-gray-600 text-white rounded-xl font-semibold" }, "Fermer")
-  );
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "⚔️ Attaque"),
-    me.usedAttackDice && React.createElement("div", { className: "bg-yellow-100 border border-yellow-400 rounded-lg p-3 text-center text-yellow-800" }, "⚠️ Dé d'attaque déjà utilisé"),
-    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "🏰 Conquérir territoire"),
-      React.createElement("div", { className: "mb-3" },
-        React.createElement("label", { className: "text-sm text-gray-600 mb-2 block" }, "Biome"),
-        React.createElement("div", { className: "grid grid-cols-3 gap-2" },
-          Object.entries(BIOMES).map(([k, b]) => React.createElement("button", { key: k, onClick: () => setSelectedBiome(k), className: "p-3 rounded-lg text-center " + (selectedBiome === k ? 'bg-purple-600 text-white' : 'bg-white border-2 border-gray-200') }, React.createElement("div", { className: "text-2xl" }, b.emoji), React.createElement("div", { className: "text-xs mt-1" }, b.name.split(' ')[0])))
-        )
-      ),
-      React.createElement("div", { className: "mb-3" },
-        React.createElement("label", { className: "text-sm text-gray-600 mb-2 block" }, "Difficulté"),
-        React.createElement("div", { className: "grid grid-cols-3 gap-2" },
-          [6, 8, 10].map(d => React.createElement("button", { key: d, onClick: () => setSelectedDiff(d), className: "p-3 rounded-lg text-center " + (selectedDiff === d ? 'bg-purple-600 text-white' : 'bg-white border-2 border-gray-200') }, React.createElement("div", { className: "font-bold" }, d), React.createElement("div", { className: "text-xs" }, (d === 6 ? 3 : d === 8 ? 4 : 5) + " PDV")))
-        )
-      ),
-      React.createElement("button", { onClick: attackTerritory, disabled: !isMyTurn || me.usedAttackDice || !selectedBiome || !selectedDiff, className: "w-full py-3 bg-purple-600 text-white rounded-xl font-semibold disabled:opacity-50" }, "⚔️ Attaquer")
-    ),
-    (me.territories || []).length > 0 && React.createElement("div", { className: "bg-green-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "🏰 Mes territoires (" + (me.territories || []).length + ")"),
-      React.createElement("div", { className: "flex flex-wrap gap-2" }, (me.territories || []).map((t, i) => React.createElement("span", { key: i, className: "bg-green-200 text-green-800 px-3 py-1 rounded-full text-sm" }, BIOMES[t.biome].emoji + " Diff." + t.difficulty)))
-    )
-  );
-}
-
-// Objectif Tab
-function ObjectifTab({ me, isMyTurn, updateMe, notify, game, updateGame, addPdv }) {
-  const completeObjective = (obj) => {
-    if (!isMyTurn) return notify("Pas votre tour", "error");
-    const completed = game.completedObjectives || [];
-    if (completed.includes(obj.id)) return notify("Déjà complété", "error");
-    if ((me[obj.resource] || 0) < obj.amount) return notify("Ressources insuffisantes", "error");
-    updateMe({ [obj.resource]: me[obj.resource] - obj.amount });
-    updateGame({ completedObjectives: [...completed, obj.id] });
-    addPdv(obj.pdv, 'BONUS');
-    notify("+" + obj.pdv + " PDV !", "success");
+  const resetDeck = () => {
+    if (confirm("Réinitialiser le deck d'anomalies ?")) {
+      updateGame({ drawnAnomalies: [] });
+      setCurrentCard(null);
+      setAppliedEffect(null);
+    }
   };
 
-  const exchangeQuest = (quest) => {
-    if (!isMyTurn) return notify("Pas votre tour", "error");
-    const info = parseQuest(quest.text);
-    if (!info.isExchange) return;
-    if ((me[info.resourceKey] || 0) < info.resourceAmount) return notify("Ressources insuffisantes", "error");
-    const questBonus = rulesEngine.getQuestBonus(me);
-    updateMe({ quests: (me.quests || []).filter(q => q.id !== quest.id), [info.resourceKey]: me[info.resourceKey] - info.resourceAmount });
-    addPdv(info.pdv + questBonus, 'QUEST_EXCHANGE');
-    notify("+" + (info.pdv + questBonus) + " PDV !", "success");
-  };
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "🎯 Objectifs"),
-    React.createElement("div", { className: "bg-purple-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "Objectifs de ressources"),
-      React.createElement("div", { className: "space-y-2" },
-        OBJECTIVES.map(obj => {
-          const completed = (game.completedObjectives || []).includes(obj.id);
-          const canComplete = (me[obj.resource] || 0) >= obj.amount && !completed;
-          return React.createElement("div", { key: obj.id, className: "p-3 rounded-lg flex items-center justify-between " + (completed ? 'bg-green-100' : canComplete ? 'bg-blue-50' : 'bg-white') },
-            React.createElement("div", { className: "flex items-center gap-2" }, React.createElement("span", { className: "text-xl" }, obj.emoji), React.createElement("span", { className: "font-semibold" }, obj.label), React.createElement("span", { className: "text-sm text-gray-500" }, "(vous: " + (me[obj.resource] || 0) + ")")),
-            completed ? React.createElement("span", { className: "text-green-600 font-bold" }, "✓") : React.createElement("button", { onClick: () => completeObjective(obj), disabled: !isMyTurn || !canComplete, className: "px-3 py-1 rounded font-semibold " + (canComplete ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-500') }, "+" + obj.pdv)
-          );
-        })
-      )
-    ),
-    React.createElement("div", { className: "bg-green-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "Mes quêtes (" + (me.quests || []).length + "/2)"),
-      (me.quests || []).length === 0 ? React.createElement("p", { className: "text-gray-500 italic text-center py-4" }, "Aucune quête") :
-      React.createElement("div", { className: "space-y-3" }, (me.quests || []).map(q => {
-        const info = parseQuest(q.text);
-        const canExchange = info.isExchange && (me[info.resourceKey] || 0) >= info.resourceAmount;
-        return React.createElement("div", { key: q.id, className: "bg-white rounded-lg p-4" },
-          React.createElement("p", { className: "text-sm text-gray-700 mb-3" }, q.text),
-          info.isExchange && React.createElement("button", { onClick: () => exchangeQuest(q), disabled: !isMyTurn || !canExchange, className: "w-full py-2 rounded-lg font-semibold " + (canExchange ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500') }, canExchange ? "✅ Échanger (+" + info.pdv + " PDV)" : "Ressources insuffisantes")
-        );
-      }))
-    )
-  );
-}
-
-// Échange Tab
-function EchangeTab({ me, isMyTurn, updateMe, notify }) {
-  const convertResource = (from) => {
-    if (!isMyTurn) return notify("Pas votre tour", "error");
-    const rate = EXCHANGE_RATES[from];
-    if (!rate || (me[from] || 0) < 1) return notify("Pas assez", "error");
-    updateMe({ [from]: me[from] - 1, or: (me.or || 0) + rate.toOr });
-    notify("+" + rate.toOr + " Or", "success");
-  };
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "🔄 Échange"),
-    React.createElement("div", { className: "bg-yellow-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "💱 Conversion en Or"),
-      React.createElement("div", { className: "grid grid-cols-3 gap-2" },
-        ['cuivre', 'argent', 'obsidienne'].map(res => {
-          const rate = EXCHANGE_RATES[res];
-          const emoji = res === 'cuivre' ? '🌳' : res === 'argent' ? '🏜️' : '⛰️';
-          const has = (me[res] || 0) >= 1;
-          return React.createElement("button", { key: res, onClick: () => convertResource(res), disabled: !isMyTurn || !has, className: "p-3 rounded-lg text-center " + (has ? 'bg-white hover:bg-yellow-100' : 'bg-gray-100 opacity-50') },
-            React.createElement("div", { className: "text-2xl" }, emoji),
-            React.createElement("div", { className: "text-xs mt-1" }, "1 → " + rate.toOr + " 💰"),
-            React.createElement("div", { className: "text-xs text-gray-500" }, "(" + (me[res] || 0) + ")")
-          );
-        })
-      )
-    ),
-    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "Mes ressources"),
-      React.createElement("div", { className: "grid grid-cols-4 gap-3 text-center" },
-        React.createElement("div", { className: "bg-white rounded-lg p-3" }, React.createElement("div", { className: "text-2xl" }, "💰"), React.createElement("div", { className: "font-bold text-xl" }, me.or || 0)),
-        React.createElement("div", { className: "bg-white rounded-lg p-3" }, React.createElement("div", { className: "text-2xl" }, "🌳"), React.createElement("div", { className: "font-bold text-xl" }, me.cuivre || 0)),
-        React.createElement("div", { className: "bg-white rounded-lg p-3" }, React.createElement("div", { className: "text-2xl" }, "🏜️"), React.createElement("div", { className: "font-bold text-xl" }, me.argent || 0)),
-        React.createElement("div", { className: "bg-white rounded-lg p-3" }, React.createElement("div", { className: "text-2xl" }, "⛰️"), React.createElement("div", { className: "font-bold text-xl" }, me.obsidienne || 0))
-      )
-    )
-  );
-}
-
-// Personnage Tab
-function PersonnageTab({ me, updateMe, handlePassStart, isMyTurn }) {
-  const adjustPv = (delta) => updateMe({ pvCurrent: Math.max(0, Math.min(me.character.pvMax, me.pvCurrent + delta)) });
-  const adjustResource = (key, delta) => updateMe({ [key]: Math.max(0, (me[key] || 0) + delta) });
+  const remaining = ANOMALIES.length - (game.drawnAnomalies || []).length;
 
   return React.createElement("div", { className: "space-y-6" },
     React.createElement("div", { className: "text-center" },
-      React.createElement("div", { className: "text-5xl mb-2" }, me.character?.emoji),
-      React.createElement("h3", { className: "text-2xl font-bold text-gray-800" }, me.character?.name),
-      React.createElement("p", { className: "text-gray-600" }, me.character?.role)
+      React.createElement("h3", { className: "text-2xl font-bold text-gray-800 mb-2" }, "Anomalies"),
+      React.createElement("p", { className: "text-gray-600" }, "Cartes restantes: ", React.createElement("strong", null, remaining), " / " + ANOMALIES.length)
     ),
-    isMyTurn && React.createElement("button", { onClick: handlePassStart, className: "w-full py-3 bg-gradient-to-r from-teal-500 to-blue-500 text-white rounded-xl font-bold" }, "🏁 Passage par Départ (+1 PDV)"),
-    React.createElement("div", { className: "bg-red-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "❤️ Points de Vie"),
-      React.createElement("div", { className: "text-center text-3xl font-bold text-red-600 mb-3" }, me.pvCurrent + " / " + me.character?.pvMax),
-      React.createElement("div", { className: "flex gap-2 justify-center" },
-        React.createElement("button", { onClick: () => adjustPv(-1), className: "px-4 py-2 bg-red-200 rounded-lg font-bold" }, "-1"),
-        React.createElement("button", { onClick: () => updateMe({ pvCurrent: me.character.pvMax }), className: "px-4 py-2 bg-green-200 rounded-lg font-bold" }, "Max"),
-        React.createElement("button", { onClick: () => adjustPv(1), className: "px-4 py-2 bg-green-200 rounded-lg font-bold" }, "+1")
-      )
+    React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-purple-600 to-purple-800 rounded-xl p-8 flex flex-col items-center justify-center transition-all " + (isAnimating ? 'scale-95 opacity-50' : 'scale-100') },
+      currentCard ? React.createElement("div", { className: "text-center" },
+        React.createElement("p", { className: "text-xl text-white font-medium" }, currentCard),
+        appliedEffect && React.createElement("p", { className: "text-yellow-300 font-bold mt-3 text-lg" }, "✨ " + appliedEffect)
+      ) : React.createElement("p", { className: "text-gray-300 text-center italic" }, 'Cliquez sur "Tirer une anomalie"')
+    ),
+    React.createElement("div", { className: "grid grid-cols-2 gap-4" },
+      React.createElement("button", { onClick: drawCard, disabled: isAnimating || !isMyTurn, className: "py-4 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50" }, "🔮 Tirer une anomalie"),
+      React.createElement("button", { onClick: resetDeck, className: "py-4 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700 transition-colors" }, "🔄 Réinitialiser")
     ),
     React.createElement("div", { className: "bg-blue-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "📊 Statistiques"),
-      React.createElement("div", { className: "grid grid-cols-2 gap-3" },
-        Object.entries(STAT_NAMES).map(([k, n]) => {
-          const base = me.stats?.[k] || 0;
-          const bonus = (me.effects || []).filter(e => e.stat === k).reduce((s, e) => s + e.delta, 0);
-          return React.createElement("div", { key: k, className: "bg-white rounded-lg p-3 text-center" },
-            React.createElement("div", { className: "text-xs text-gray-500" }, n),
-            React.createElement("div", { className: "text-xl font-bold" }, base >= 0 ? "+" + base : base, bonus !== 0 && React.createElement("span", { className: "text-sm ml-1 " + (bonus > 0 ? 'text-green-600' : 'text-red-600') }, bonus > 0 ? "+" + bonus : bonus))
+      React.createElement("p", { className: "text-sm text-gray-700" }, React.createElement("strong", null, "ℹ️ Application automatique:")),
+      React.createElement("ul", { className: "text-xs text-gray-600 mt-2 space-y-1" },
+        React.createElement("li", null, "• Soins/Dégâts → PV modifiés ✓"),
+        React.createElement("li", null, "• Bénédictions → +2 à la stat ✓"),
+        React.createElement("li", null, "• Malédictions → -2 à la stat ✓"),
+        React.createElement("li", null, "• Ressources → Ajoutées/Retirées ✓")
+      )
+    )
+  );
+}
+
+// ============================================================================
+// QUETE TAB
+// ============================================================================
+function QueteTab({ me, isMyTurn, updateMe, notify, game, updateGame }) {
+  const [currentCard, setCurrentCard] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [attemptResult, setAttemptResult] = useState(null);
+  const [showQuestChoice, setShowQuestChoice] = useState(false);
+  const [pendingQuest, setPendingQuest] = useState(null);
+
+  const drawCard = () => {
+    if (!isMyTurn) return notify("Pas votre tour", "error");
+    
+    const drawn = game.drawnQuetes || [];
+    const availableCards = QUETES.filter((_, index) => !drawn.includes(index));
+    if (availableCards.length === 0) return notify("Toutes les quêtes ont été tirées !", "error");
+
+    setIsAnimating(true);
+    setCurrentCard(null);
+
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * availableCards.length);
+      const selectedCard = availableCards[randomIndex];
+      const originalIndex = QUETES.indexOf(selectedCard);
+
+      updateGame({ drawnQuetes: [...drawn, originalIndex] });
+      setCurrentCard(selectedCard);
+      setIsAnimating(false);
+
+      const newQuest = { id: "quest_" + Date.now(), text: selectedCard, completed: false };
+
+      if ((me.quests || []).length >= 2) {
+        setPendingQuest(newQuest);
+        setShowQuestChoice(true);
+      } else {
+        updateMe({ quests: [...(me.quests || []), newQuest] });
+      }
+    }, 300);
+  };
+
+  const handleQuestChoice = (action, questIdToRemove) => {
+    if (action === 'refuse') {
+      setShowQuestChoice(false);
+      setPendingQuest(null);
+    } else if (action === 'replace') {
+      const newQuests = (me.quests || []).filter(q => q.id !== questIdToRemove);
+      newQuests.push(pendingQuest);
+      updateMe({ quests: newQuests });
+      setShowQuestChoice(false);
+      setPendingQuest(null);
+    }
+  };
+
+  const attemptQuest = (questId, questText) => {
+    if (!isMyTurn) return notify("Pas votre tour", "error");
+    if (me.usedAttackDice) return notify("Jet d'attaque déjà utilisé ce tour", "error");
+
+    const questInfo = parseQuest(questText);
+    if (!questInfo.isCombat) return notify("Cette quête ne nécessite pas de jet !", "error");
+
+    const statKey = questInfo.stat;
+    const diceRoll = Math.floor(Math.random() * 10);
+    const baseStat = me.stats?.[statKey] || 0;
+    const effectsBonus = (me.effects || []).filter(e => e.stat === statKey).reduce((sum, e) => sum + e.delta, 0);
+    const questBonus = me.character?.questBonus || 0;
+    const total = diceRoll + baseStat + effectsBonus + questBonus;
+    const difficulty = questInfo.difficulty;
+    const success = total >= difficulty;
+
+    setAttemptResult({ stat: questInfo.statName, diceRoll, baseStat, effectsBonus, questBonus, total, difficulty, success, pdv: questInfo.pdv });
+
+    if (success) {
+      const newQuests = (me.quests || []).filter(q => q.id !== questId);
+      const pdvBonus = me.character?.questPdvBonus || 0;
+      updateMe({ quests: newQuests, pdv: (me.pdv || 0) + questInfo.pdv + pdvBonus, usedAttackDice: true });
+      setTimeout(() => { notify("Quête réussie ! +" + (questInfo.pdv + pdvBonus) + " PDV", "success"); setAttemptResult(null); }, 2000);
+    } else {
+      const damage = Math.max(1, difficulty - total);
+      updateMe({ pvCurrent: Math.max(0, me.pvCurrent - damage), usedAttackDice: true });
+      setTimeout(() => { notify("Quête échouée ! -" + damage + " PV", "error"); setAttemptResult(null); }, 2000);
+    }
+  };
+
+  const completeExchangeQuest = (questId, questText) => {
+    if (!isMyTurn) return notify("Pas votre tour", "error");
+    
+    const questInfo = parseQuest(questText);
+    if (!questInfo.isExchange) return;
+
+    const playerResource = me[questInfo.resourceKey] || 0;
+    if (playerResource < questInfo.resourceAmount) {
+      return notify("Ressources insuffisantes ! Requis: " + questInfo.resourceAmount + ", Disponible: " + playerResource, "error");
+    }
+
+    const newQuests = (me.quests || []).filter(q => q.id !== questId);
+    const pdvBonus = me.character?.questPdvBonus || 0;
+    updateMe({
+      quests: newQuests,
+      pdv: (me.pdv || 0) + questInfo.pdv + pdvBonus,
+      [questInfo.resourceKey]: playerResource - questInfo.resourceAmount
+    });
+    notify("Quête terminée ! -" + questInfo.resourceAmount + " " + questInfo.resourceDisplayName + ", +" + (questInfo.pdv + pdvBonus) + " PDV", "success");
+  };
+
+  const resetDeck = () => {
+    if (confirm("Réinitialiser le deck de quêtes ?")) {
+      updateGame({ drawnQuetes: [] });
+      setCurrentCard(null);
+    }
+  };
+
+  const remaining = QUETES.length - (game.drawnQuetes || []).length;
+
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("div", { className: "text-center" },
+      React.createElement("h3", { className: "text-2xl font-bold text-gray-800 mb-2" }, "Quêtes"),
+      React.createElement("p", { className: "text-gray-600" }, "Cartes restantes: ", React.createElement("strong", null, remaining), " / " + QUETES.length)
+    ),
+    React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-green-600 to-green-800 rounded-xl p-8 flex items-center justify-center transition-all " + (isAnimating ? 'scale-95 opacity-50' : 'scale-100') },
+      currentCard ? React.createElement("p", { className: "text-lg text-center text-white font-medium" }, currentCard) : React.createElement("p", { className: "text-gray-300 text-center italic" }, 'Cliquez sur "Tirer une quête"')
+    ),
+    attemptResult && React.createElement("div", { className: "bg-gradient-to-r " + (attemptResult.success ? 'from-green-600 to-green-800' : 'from-red-600 to-red-800') + " rounded-xl p-6 text-white" },
+      React.createElement("div", { className: "text-center mb-4" },
+        React.createElement("div", { className: "text-2xl font-bold mb-2" }, attemptResult.success ? "✅ SUCCÈS" : "❌ ÉCHEC"),
+        React.createElement("div", { className: "text-xl" }, attemptResult.stat),
+        React.createElement("div", { className: "text-5xl font-bold my-2" }, attemptResult.total + " vs " + attemptResult.difficulty)
+      ),
+      React.createElement("div", { className: "bg-white bg-opacity-20 rounded-lg p-4 text-sm" },
+        React.createElement("div", { className: "flex justify-between mb-1" }, React.createElement("span", null, "Dé:"), React.createElement("span", { className: "font-bold" }, attemptResult.diceRoll)),
+        React.createElement("div", { className: "flex justify-between mb-1" }, React.createElement("span", null, "Base:"), React.createElement("span", { className: "font-bold" }, attemptResult.baseStat >= 0 ? "+" + attemptResult.baseStat : attemptResult.baseStat)),
+        React.createElement("div", { className: "flex justify-between mb-1" }, React.createElement("span", null, "États:"), React.createElement("span", { className: "font-bold" }, attemptResult.effectsBonus >= 0 ? "+" + attemptResult.effectsBonus : attemptResult.effectsBonus)),
+        attemptResult.questBonus > 0 && React.createElement("div", { className: "flex justify-between mb-1" }, React.createElement("span", null, "Bonus quête:"), React.createElement("span", { className: "font-bold" }, "+" + attemptResult.questBonus))
+      )
+    ),
+    showQuestChoice && pendingQuest && React.createElement("div", { className: "bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4" },
+      React.createElement("h4", { className: "font-bold text-gray-800 mb-3" }, "⚠️ Limite de quêtes atteinte (2 max)"),
+      React.createElement("p", { className: "text-sm text-gray-700 mb-4" }, React.createElement("strong", null, "Nouvelle quête:"), " " + pendingQuest.text),
+      React.createElement("div", { className: "space-y-2 mb-4" },
+        (me.quests || []).map(quest => React.createElement("button", { key: quest.id, onClick: () => handleQuestChoice('replace', quest.id), className: "w-full text-left p-3 bg-white border-2 border-gray-300 rounded-lg hover:border-red-500 hover:bg-red-50" },
+          React.createElement("p", { className: "text-xs text-gray-700" }, "Remplacer: " + quest.text)
+        ))
+      ),
+      React.createElement("button", { onClick: () => handleQuestChoice('refuse'), className: "w-full py-2 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700" }, "Refuser la nouvelle quête")
+    ),
+    React.createElement("div", { className: "grid grid-cols-2 gap-4" },
+      React.createElement("button", { onClick: drawCard, disabled: isAnimating || !isMyTurn || showQuestChoice, className: "py-4 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-colors disabled:opacity-50" }, "📜 Tirer une quête"),
+      React.createElement("button", { onClick: resetDeck, className: "py-4 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700 transition-colors" }, "🔄 Réinitialiser")
+    ),
+    React.createElement("div", null,
+      React.createElement("h4", { className: "text-lg font-bold text-gray-800 mb-3" }, "Mes quêtes (" + (me.quests || []).length + "/2)"),
+      (me.quests || []).length === 0 ? React.createElement("p", { className: "text-gray-500 text-center py-4" }, "Aucune quête active") :
+      React.createElement("div", { className: "space-y-3" },
+        (me.quests || []).map(quest => {
+          const questInfo = parseQuest(quest.text);
+          const isExchange = questInfo.isExchange;
+          const isCombat = questInfo.isCombat;
+          const hasEnoughResources = isExchange && (me[questInfo.resourceKey] || 0) >= questInfo.resourceAmount;
+          
+          return React.createElement("div", { key: quest.id, className: "bg-gray-50 rounded-lg p-4 border-2 border-gray-300" },
+            React.createElement("p", { className: "text-sm text-gray-700 mb-3" }, quest.text),
+            isExchange && React.createElement("p", { className: "text-xs mb-2 font-semibold " + (hasEnoughResources ? 'text-green-600' : 'text-red-600') },
+              hasEnoughResources ? "✓ Ressources disponibles (" + (me[questInfo.resourceKey] || 0) + "/" + questInfo.resourceAmount + ")" : "✗ Insuffisant (" + (me[questInfo.resourceKey] || 0) + "/" + questInfo.resourceAmount + ")"
+            ),
+            isCombat && React.createElement("p", { className: "text-xs mb-2 font-semibold text-blue-600" }, "Difficulté: " + questInfo.difficulty + " en " + questInfo.statName),
+            React.createElement("div", { className: "flex gap-2" },
+              isExchange && React.createElement("button", { onClick: () => completeExchangeQuest(quest.id, quest.text), disabled: !isMyTurn || !hasEnoughResources, className: "flex-1 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 text-sm" }, "✓ Échanger"),
+              isCombat && React.createElement("button", { onClick: () => attemptQuest(quest.id, quest.text), disabled: !isMyTurn || me.usedAttackDice || attemptResult, className: "flex-1 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 text-sm" }, "⚔️ Tenter")
+            )
           );
         })
       )
+    )
+  );
+}
+
+// ============================================================================
+// STATISTIQUE TAB
+// ============================================================================
+function StatistiqueTab() {
+  const [currentStat, setCurrentStat] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const drawStat = () => {
+    setIsAnimating(true);
+    setCurrentStat(null);
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * STATISTIQUES.length);
+      setCurrentStat(STATISTIQUES[randomIndex]);
+      setIsAnimating(false);
+    }, 300);
+  };
+
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "Statistique aléatoire"),
+    React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-8 flex items-center justify-center transition-all " + (isAnimating ? 'scale-95 opacity-50' : 'scale-100') },
+      currentStat ? React.createElement("p", { className: "text-4xl text-center text-white font-bold" }, currentStat) : React.createElement("p", { className: "text-gray-300 text-center italic" }, 'Cliquez sur "Tirer une statistique"')
     ),
-    React.createElement("div", { className: "bg-yellow-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "💎 Ressources"),
+    React.createElement("button", { onClick: drawStat, disabled: isAnimating, className: "w-full py-4 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50" }, "🎲 Tirer une statistique")
+  );
+}
+
+// ============================================================================
+// DE TAB - Déplacement, Attaque, Combat
+// ============================================================================
+function DeTab({ me, isMyTurn, updateMe, notify, game, updateGame, updatePlayer, players, user }) {
+  const [moveResult, setMoveResult] = useState(null);
+  const [attackResult, setAttackResult] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [combatMode, setCombatMode] = useState(null);
+  const [selectedOpponent, setSelectedOpponent] = useState(null);
+  const [combatResult, setCombatResult] = useState(null);
+  const [chosenStat, setChosenStat] = useState(null);
+
+  const rollMoveDice = () => {
+    setIsAnimating(true);
+    setMoveResult(null);
+    setTimeout(() => {
+      const result = Math.floor(Math.random() * 10);
+      setMoveResult(result);
+      setIsAnimating(false);
+    }, 600);
+  };
+
+  const rollAttackDice = () => {
+    if (!isMyTurn) return notify("Pas votre tour", "error");
+    if (me.usedAttackDice) return notify("Jet déjà utilisé ce tour", "error");
+
+    setIsAnimating(true);
+    setAttackResult(null);
+
+    setTimeout(() => {
+      const statIndex = Math.floor(Math.random() * STATISTIQUES.length);
+      const stat = STATISTIQUES[statIndex];
+      const statKey = STAT_MAPPING[stat];
+
+      setTimeout(() => {
+        const diceRoll = Math.floor(Math.random() * 10);
+        const baseStat = me.stats?.[statKey] || 0;
+        const effectsBonus = (me.effects || []).filter(e => e.stat === statKey).reduce((sum, e) => sum + e.delta, 0);
+        const total = diceRoll + baseStat + effectsBonus;
+
+        setAttackResult({ stat, statKey, diceRoll, baseStat, effectsBonus, total });
+        updateMe({ usedAttackDice: true });
+        setIsAnimating(false);
+      }, 400);
+    }, 400);
+  };
+
+  const startCombat = () => {
+    if (!isMyTurn) return notify("Pas votre tour", "error");
+    if (me.usedAttackDice) return notify("Jet déjà utilisé ce tour", "error");
+    setCombatMode('select_opponent');
+  };
+
+  const selectOpponent = (oppUid) => {
+    setSelectedOpponent(oppUid);
+    if (me.character?.chooseStat) {
+      setCombatMode('choose_stat');
+    } else {
+      executeCombat(oppUid, null);
+    }
+  };
+
+  const executeCombat = (oppUid, forcedStatKey) => {
+    setCombatMode('rolling');
+    setIsAnimating(true);
+
+    setTimeout(() => {
+      const opponent = players.find(p => p.oderId === oppUid);
+      if (!opponent) { setCombatMode(null); return; }
+
+      // Determine stat
+      let statKey, statName;
+      if (forcedStatKey) {
+        statKey = forcedStatKey;
+        statName = STAT_NAMES[statKey];
+      } else {
+        const statIndex = Math.floor(Math.random() * STATISTIQUES.length);
+        statName = STATISTIQUES[statIndex];
+        statKey = STAT_MAPPING[statName];
+      }
+
+      // Roll dice
+      const attackerDice = Math.floor(Math.random() * 10);
+      const defenderDice = Math.floor(Math.random() * 10);
+
+      // Calculate totals
+      const attackerBase = me.stats?.[statKey] || 0;
+      const attackerEffects = (me.effects || []).filter(e => e.stat === statKey).reduce((sum, e) => sum + e.delta, 0);
+      const attackerTotal = attackerDice + attackerBase + attackerEffects;
+
+      const defenderBase = opponent.stats?.[statKey] || 0;
+      const defenderEffects = (opponent.effects || []).filter(e => e.stat === statKey).reduce((sum, e) => sum + e.delta, 0);
+      const defenderTotal = defenderDice + defenderBase + defenderEffects;
+
+      const difference = attackerTotal - defenderTotal;
+
+      let result = {
+        statName,
+        attacker: { name: me.name, dice: attackerDice, base: attackerBase, effects: attackerEffects, total: attackerTotal },
+        defender: { name: opponent.name, dice: defenderDice, base: defenderBase, effects: defenderEffects, total: defenderTotal },
+        difference,
+        attackerWins: difference > 0
+      };
+
+      let myPvChange = 0;
+      let oppPvChange = 0;
+      let pdvGained = 0;
+
+      if (difference > 0) {
+        // Attacker wins
+        const damage = Math.abs(difference);
+        oppPvChange = -damage;
+        result.damage = damage;
+
+        const newOppHP = Math.max(0, opponent.pvCurrent - damage);
+        if (newOppHP === 0) {
+          pdvGained = 1;
+          result.defenderDied = true;
+          // Cursed kill bonus for Hérétique
+          if (me.character?.cursedKillBonus && (opponent.effects || []).some(e => e.type === 'CURSE')) {
+            pdvGained += me.character.cursedKillBonus;
+            result.cursedKillBonus = true;
+          }
+        }
+
+        // Riposte from Homme-bête
+        if (opponent.character?.counterDamage && !me.character?.noCounterDamage) {
+          myPvChange -= opponent.character.counterDamage;
+          result.riposteDamage = opponent.character.counterDamage;
+        }
+
+        // Heal on win for Homme-bête
+        if (me.character?.healOnWin) {
+          const healAmount = Math.min(me.character.healOnWin, me.character.pvMax - me.pvCurrent);
+          if (healAmount > 0) {
+            myPvChange += healAmount;
+            result.healed = healAmount;
+          }
+        }
+
+        result.pdvGained = pdvGained;
+      } else if (difference < 0) {
+        // Defender wins - counter damage unless Chasseur
+        if (!me.character?.noCounterDamage) {
+          myPvChange = -1;
+          result.counterDamage = 1;
+        } else {
+          result.noDamage = true;
+        }
+      } else {
+        result.draw = true;
+      }
+
+      // Apply changes
+      if (oppPvChange !== 0) {
+        updatePlayer(oppUid, { pvCurrent: Math.max(0, opponent.pvCurrent + oppPvChange) });
+      }
+
+      const updates = { usedAttackDice: true };
+      if (myPvChange !== 0) updates.pvCurrent = Math.max(0, me.pvCurrent + myPvChange);
+      if (pdvGained > 0) updates.pdv = (me.pdv || 0) + pdvGained;
+      updateMe(updates);
+
+      setCombatResult(result);
+      setCombatMode('result');
+      setIsAnimating(false);
+    }, 800);
+  };
+
+  const resetCombat = () => {
+    setCombatMode(null);
+    setSelectedOpponent(null);
+    setCombatResult(null);
+    setChosenStat(null);
+  };
+
+  const opponents = players.filter(p => p.oderId !== user.uid);
+
+  // Combat: Select opponent
+  if (combatMode === 'select_opponent') {
+    return React.createElement("div", { className: "space-y-6" },
+      React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "⚔️ Sélection d'adversaire"),
+      React.createElement("div", { className: "space-y-3" },
+        opponents.map(opp => React.createElement("button", { key: opp.oderId, onClick: () => selectOpponent(opp.oderId), className: "w-full p-4 bg-red-50 border-2 border-red-300 rounded-xl hover:bg-red-100 text-left" },
+          React.createElement("div", { className: "flex justify-between items-center" },
+            React.createElement("div", null,
+              React.createElement("div", { className: "font-bold text-gray-800" }, opp.name),
+              React.createElement("div", { className: "text-sm text-gray-600" }, opp.character?.name)
+            ),
+            React.createElement("div", { className: "text-right" },
+              React.createElement("div", { className: "text-2xl font-bold text-red-600" }, opp.pvCurrent + "/" + opp.character?.pvMax),
+              React.createElement("div", { className: "text-xs text-gray-500" }, "PV")
+            )
+          )
+        ))
+      ),
+      React.createElement("button", { onClick: resetCombat, className: "w-full py-3 bg-gray-600 text-white rounded-xl font-semibold" }, "Annuler")
+    );
+  }
+
+  // Combat: Choose stat (Hérétique)
+  if (combatMode === 'choose_stat') {
+    const opponent = players.find(p => p.oderId === selectedOpponent);
+    return React.createElement("div", { className: "space-y-6" },
+      React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "⚔️ Choix de statistique"),
+      React.createElement("p", { className: "text-center text-gray-600" }, "Adversaire: ", React.createElement("strong", null, opponent?.name)),
+      React.createElement("p", { className: "text-center text-sm text-purple-600 font-semibold" }, "Pouvoir Hérétique: choisissez la stat !"),
       React.createElement("div", { className: "grid grid-cols-2 gap-3" },
-        [{ k: 'or', e: '💰' }, { k: 'cuivre', e: '🌳' }, { k: 'argent', e: '🏜️' }, { k: 'obsidienne', e: '⛰️' }].map(r =>
-          React.createElement("div", { key: r.k, className: "bg-white rounded-lg p-3 text-center" },
-            React.createElement("div", { className: "text-xl" }, r.e),
-            React.createElement("div", { className: "text-xl font-bold" }, me[r.k] || 0),
-            React.createElement("div", { className: "flex gap-1 justify-center mt-1" },
-              React.createElement("button", { onClick: () => adjustResource(r.k, -1), className: "px-2 py-1 bg-gray-200 rounded text-sm" }, "-"),
-              React.createElement("button", { onClick: () => adjustResource(r.k, 1), className: "px-2 py-1 bg-gray-200 rounded text-sm" }, "+")
+        Object.entries(STAT_NAMES).map(([key, name]) => React.createElement("button", { key: key, onClick: () => executeCombat(selectedOpponent, key), className: "py-4 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700" }, name))
+      ),
+      React.createElement("button", { onClick: resetCombat, className: "w-full py-3 bg-gray-600 text-white rounded-xl font-semibold" }, "Annuler")
+    );
+  }
+
+  // Combat: Rolling
+  if (combatMode === 'rolling') {
+    return React.createElement("div", { className: "space-y-6" },
+      React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "⚔️ Combat en cours..."),
+      React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-red-600 to-red-800 rounded-xl p-6 flex items-center justify-center animate-pulse" },
+        React.createElement("p", { className: "text-white text-xl" }, "🎲 Lancement des dés...")
+      )
+    );
+  }
+
+  // Combat: Result
+  if (combatMode === 'result' && combatResult) {
+    return React.createElement("div", { className: "space-y-6" },
+      React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "⚔️ Résultat du combat"),
+      React.createElement("div", { className: "text-center mb-4" },
+        React.createElement("div", { className: "text-xl font-bold text-purple-600 mb-2" }, combatResult.statName),
+        React.createElement("div", { className: "text-4xl font-bold" }, combatResult.attacker.total + " vs " + combatResult.defender.total)
+      ),
+      React.createElement("div", { className: "grid grid-cols-2 gap-4" },
+        // Attacker card
+        React.createElement("div", { className: "bg-blue-50 border-2 border-blue-300 rounded-xl p-4" },
+          React.createElement("div", { className: "text-center mb-3" },
+            React.createElement("div", { className: "font-bold text-gray-700" }, "Attaquant"),
+            React.createElement("div", { className: "text-sm text-gray-600" }, combatResult.attacker.name)
+          ),
+          React.createElement("div", { className: "space-y-1 text-sm" },
+            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "Dé:"), React.createElement("span", { className: "font-bold" }, combatResult.attacker.dice)),
+            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "Base:"), React.createElement("span", { className: "font-bold" }, combatResult.attacker.base >= 0 ? "+" + combatResult.attacker.base : combatResult.attacker.base)),
+            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "États:"), React.createElement("span", { className: "font-bold" }, combatResult.attacker.effects >= 0 ? "+" + combatResult.attacker.effects : combatResult.attacker.effects)),
+            React.createElement("div", { className: "border-t pt-1 mt-1 flex justify-between" }, React.createElement("span", { className: "font-bold" }, "Total:"), React.createElement("span", { className: "font-bold text-xl text-blue-600" }, combatResult.attacker.total))
+          )
+        ),
+        // Defender card
+        React.createElement("div", { className: "bg-red-50 border-2 border-red-300 rounded-xl p-4" },
+          React.createElement("div", { className: "text-center mb-3" },
+            React.createElement("div", { className: "font-bold text-gray-700" }, "Défenseur"),
+            React.createElement("div", { className: "text-sm text-gray-600" }, combatResult.defender.name)
+          ),
+          React.createElement("div", { className: "space-y-1 text-sm" },
+            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "Dé:"), React.createElement("span", { className: "font-bold" }, combatResult.defender.dice)),
+            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "Base:"), React.createElement("span", { className: "font-bold" }, combatResult.defender.base >= 0 ? "+" + combatResult.defender.base : combatResult.defender.base)),
+            React.createElement("div", { className: "flex justify-between" }, React.createElement("span", null, "États:"), React.createElement("span", { className: "font-bold" }, combatResult.defender.effects >= 0 ? "+" + combatResult.defender.effects : combatResult.defender.effects)),
+            React.createElement("div", { className: "border-t pt-1 mt-1 flex justify-between" }, React.createElement("span", { className: "font-bold" }, "Total:"), React.createElement("span", { className: "font-bold text-xl text-red-600" }, combatResult.defender.total))
+          )
+        )
+      ),
+      // Result banner
+      React.createElement("div", { className: "rounded-xl p-6 text-white text-center " + (combatResult.draw ? 'bg-gradient-to-r from-gray-600 to-gray-800' : combatResult.attackerWins ? 'bg-gradient-to-r from-green-600 to-green-800' : 'bg-gradient-to-r from-orange-600 to-orange-800') },
+        combatResult.draw ? React.createElement("div", null,
+          React.createElement("div", { className: "text-3xl font-bold mb-2" }, "🤝 ÉGALITÉ"),
+          React.createElement("div", { className: "text-xl" }, "Aucun dégât")
+        ) : combatResult.attackerWins ? React.createElement("div", null,
+          React.createElement("div", { className: "text-3xl font-bold mb-2" }, "✅ VICTOIRE"),
+          React.createElement("div", { className: "text-xl mb-2" }, combatResult.attacker.name + " inflige " + combatResult.damage + " dégâts"),
+          combatResult.defenderDied && React.createElement("div", { className: "text-lg mt-2" }, "💀 " + combatResult.defender.name + " est mort ! +" + combatResult.pdvGained + " PDV"),
+          combatResult.healed && React.createElement("div", { className: "text-sm mt-1" }, "❤️ Soin: +" + combatResult.healed + " PV"),
+          combatResult.riposteDamage && React.createElement("div", { className: "text-sm mt-1 bg-white bg-opacity-20 rounded p-2" }, "⚠️ Riposte: -" + combatResult.riposteDamage + " PV")
+        ) : React.createElement("div", null,
+          React.createElement("div", { className: "text-3xl font-bold mb-2" }, "🛡️ ÉCHEC"),
+          combatResult.noDamage ? React.createElement("div", { className: "text-xl" }, combatResult.attacker.name + " ne prend pas de dégâts (Pouvoir)") : React.createElement("div", { className: "text-xl" }, combatResult.attacker.name + " prend " + combatResult.counterDamage + " dégât")
+        )
+      ),
+      React.createElement("button", { onClick: resetCombat, className: "w-full py-3 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700" }, "Fermer")
+    );
+  }
+
+  // Default: Dice view
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "Lancés de Dés"),
+    // Movement dice
+    React.createElement("div", { className: "bg-white border-2 border-gray-300 rounded-xl p-6" },
+      React.createElement("h4", { className: "text-lg font-bold text-gray-800 mb-4 text-center" }, "🎲 Dé de Déplacement"),
+      React.createElement("div", { className: "min-h-[150px] bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-6 flex flex-col items-center justify-center mb-4 " + (isAnimating ? 'animate-pulse' : '') },
+        moveResult !== null ? React.createElement(React.Fragment, null,
+          React.createElement("div", { className: "text-7xl font-bold text-white mb-2" }, moveResult),
+          moveResult === 0 && React.createElement("div", { className: "text-xl font-bold text-yellow-300" }, "✨ Succès Critique !")
+        ) : React.createElement("p", { className: "text-gray-300 text-center italic" }, "Lancer le dé")
+      ),
+      React.createElement("button", { onClick: rollMoveDice, disabled: isAnimating, className: "w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50" }, "🎲 Lancer (0-9)")
+    ),
+    // Attack dice
+    React.createElement("div", { className: "bg-white border-2 border-gray-300 rounded-xl p-6" },
+      React.createElement("h4", { className: "text-lg font-bold text-gray-800 mb-4 text-center" }, "⚔️ Dé d'Attaque"),
+      me.usedAttackDice && React.createElement("div", { className: "mb-4 p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center" },
+        React.createElement("p", { className: "text-sm font-semibold text-yellow-800" }, "⚠️ Jet déjà utilisé ce tour")
+      ),
+      React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-red-600 to-red-800 rounded-xl p-6 flex flex-col items-center justify-center mb-4 " + (isAnimating ? 'animate-pulse' : '') },
+        attackResult ? React.createElement("div", { className: "w-full" },
+          React.createElement("div", { className: "text-center mb-4" },
+            React.createElement("div", { className: "text-2xl font-bold text-yellow-300 mb-2" }, attackResult.stat),
+            React.createElement("div", { className: "text-6xl font-bold text-white mb-4" }, attackResult.total)
+          ),
+          React.createElement("div", { className: "bg-white bg-opacity-20 rounded-lg p-4 text-white" },
+            React.createElement("div", { className: "flex justify-between mb-2" }, React.createElement("span", { className: "text-sm" }, "Dé:"), React.createElement("span", { className: "font-bold text-lg" }, attackResult.diceRoll)),
+            React.createElement("div", { className: "flex justify-between mb-2" }, React.createElement("span", { className: "text-sm" }, "Base:"), React.createElement("span", { className: "font-bold" }, attackResult.baseStat >= 0 ? "+" + attackResult.baseStat : attackResult.baseStat)),
+            React.createElement("div", { className: "flex justify-between mb-2" }, React.createElement("span", { className: "text-sm" }, "États:"), React.createElement("span", { className: "font-bold " + (attackResult.effectsBonus >= 0 ? 'text-green-300' : 'text-red-300') }, attackResult.effectsBonus >= 0 ? "+" + attackResult.effectsBonus : attackResult.effectsBonus))
+          )
+        ) : React.createElement("p", { className: "text-gray-300 text-center italic" }, "Lancer le dé d'attaque")
+      ),
+      React.createElement("button", { onClick: rollAttackDice, disabled: isAnimating || !isMyTurn || me.usedAttackDice, className: "w-full py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 disabled:opacity-50 mb-2" }, "⚔️ Lancer Attaque"),
+      React.createElement("button", { onClick: startCombat, disabled: isAnimating || !isMyTurn || me.usedAttackDice || opponents.length === 0, className: "w-full py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50" }, "⚔️ Combat contre un joueur")
+    ),
+    // Character bonuses reminder
+    React.createElement("div", { className: "bg-blue-50 rounded-xl p-4" },
+      React.createElement("p", { className: "text-xs font-bold text-gray-700 mb-2" }, "💡 Bonus de " + me.character?.name + ":"),
+      React.createElement("ul", { className: "text-xs text-gray-600 space-y-1" },
+        me.character?.skills.map((skill, i) => React.createElement("li", { key: i }, "• " + skill))
+      )
+    )
+  );
+}
+
+// ============================================================================
+// PERSONNAGE TAB
+// ============================================================================
+function PersonnageTab({ me, updateMe, notify, gameId, user }) {
+  const [showAddEffect, setShowAddEffect] = useState(false);
+  const [newEffect, setNewEffect] = useState({ type: 'BLESS', stat: 'endurance', name: '' });
+
+  const adjustPV = (delta) => {
+    const newPV = Math.max(0, Math.min(me.character.pvMax, me.pvCurrent + delta));
+    updateMe({ pvCurrent: newPV });
+  };
+
+  const resetPV = () => updateMe({ pvCurrent: me.character.pvMax });
+
+  const adjustResource = (resource, delta) => {
+    updateMe({ [resource]: Math.max(0, (me[resource] || 0) + delta) });
+  };
+
+  const addEffect = () => {
+    if (!newEffect.name.trim()) return notify("Donnez un nom à l'état", "error");
+    const effect = {
+      id: "effect_" + Date.now(),
+      type: newEffect.type,
+      stat: newEffect.stat,
+      delta: newEffect.type === 'BLESS' ? 2 : -2,
+      name: newEffect.name.trim()
+    };
+    updateMe({ effects: [...(me.effects || []), effect] });
+    setNewEffect({ type: 'BLESS', stat: 'endurance', name: '' });
+    setShowAddEffect(false);
+    notify("État ajouté !", "success");
+  };
+
+  const removeEffect = (effectId) => {
+    if (confirm("Supprimer cet état ?")) {
+      updateMe({ effects: (me.effects || []).filter(e => e.id !== effectId) });
+    }
+  };
+
+  const passageDepart = () => {
+    const updates = {};
+    const goldBonus = me.character?.passGoldBonus || 0;
+    if (goldBonus > 0) updates.or = (me.or || 0) + goldBonus;
+    updates.blessAvailable = me.character?.canBless || false;
+    updates.curseAvailable = me.character?.canCurse || false;
+    updates.tourPlateau = (me.tourPlateau || 0) + 1;
+    updateMe(updates);
+    notify("Passage Départ ! " + (goldBonus > 0 ? "+" + goldBonus + " Or, " : "") + "Pouvoirs rechargés", "success");
+  };
+
+  const toggleSkill = (skillId) => {
+    const newSkills = (me.skills || []).map(s => s.id === skillId ? { ...s, status: s.status === 'AVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE' } : s);
+    updateMe({ skills: newSkills });
+  };
+
+  return React.createElement("div", { className: "space-y-6" },
+    // Header
+    React.createElement("div", { className: "text-center" },
+      React.createElement("div", { className: "text-5xl mb-2" }, me.character?.emoji),
+      React.createElement("h2", { className: "text-3xl font-bold text-gray-800" }, me.character?.name),
+      React.createElement("p", { className: "text-gray-600" }, me.name)
+    ),
+    // Passage Départ button
+    React.createElement("button", { onClick: passageDepart, className: "w-full py-3 bg-gradient-to-r from-teal-500 to-blue-500 text-white rounded-xl font-bold hover:from-teal-600 hover:to-blue-600" }, "🏁 Passage par la case Départ"),
+    // PV Section
+    React.createElement("div", { className: "bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl p-6 text-white" },
+      React.createElement("div", { className: "text-center mb-4" },
+        React.createElement("div", { className: "text-sm font-semibold mb-2" }, "Points de Vie"),
+        React.createElement("div", { className: "text-5xl font-bold" }, me.pvCurrent + " / " + me.character?.pvMax)
+      ),
+      React.createElement("div", { className: "grid grid-cols-3 gap-2" },
+        React.createElement("button", { onClick: () => adjustPV(-1), className: "bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg py-3 font-semibold text-lg" }, "-1"),
+        React.createElement("button", { onClick: resetPV, className: "bg-white text-red-600 rounded-lg py-3 font-semibold text-sm" }, "Reset"),
+        React.createElement("button", { onClick: () => adjustPV(1), className: "bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg py-3 font-semibold text-lg" }, "+1")
+      )
+    ),
+    // Resources Section
+    React.createElement("div", { className: "bg-gradient-to-r from-amber-500 to-yellow-500 rounded-2xl p-6 text-white" },
+      React.createElement("h3", { className: "text-xl font-bold mb-4 text-center" }, "Ressources"),
+      React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+        [{ key: 'or', emoji: '🪙', name: 'Or' }, { key: 'cuivre', emoji: '🌳', name: 'Cuivre' }, { key: 'argent', emoji: '🏜️', name: 'Argent' }, { key: 'obsidienne', emoji: '⛰️', name: 'Obsidienne' }].map(r =>
+          React.createElement("div", { key: r.key, className: "bg-white bg-opacity-20 rounded-lg p-3" },
+            React.createElement("div", { className: "text-sm font-semibold mb-2 text-center" }, r.emoji + " " + r.name),
+            React.createElement("div", { className: "text-3xl font-bold text-center mb-2" }, me[r.key] || 0),
+            React.createElement("div", { className: "flex gap-2" },
+              React.createElement("button", { onClick: () => adjustResource(r.key, -1), className: "flex-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded py-2 font-semibold" }, "-1"),
+              React.createElement("button", { onClick: () => adjustResource(r.key, 1), className: "flex-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded py-2 font-semibold" }, "+1")
             )
           )
         )
+      ),
+      React.createElement("div", { className: "mt-4 bg-white bg-opacity-20 rounded-lg p-3 text-center" },
+        React.createElement("div", { className: "text-sm font-semibold mb-1" }, "🏆 Points de Victoire"),
+        React.createElement("div", { className: "text-4xl font-bold" }, me.pdv || 0)
       )
     ),
-    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "⚔️ Compétences"),
-      React.createElement("div", { className: "space-y-2" }, (me.skills || []).map((s, i) => React.createElement("div", { key: s.id, className: "bg-white rounded-lg p-3 flex items-start gap-2" }, React.createElement("span", { className: "text-xl" }, i === 0 ? '🔮' : i === 1 ? '⚔️' : '🛡️'), React.createElement("p", { className: "text-sm text-gray-700" }, s.description))))
-    )
-  );
-}
-
-// PDV Tab
-function PdvTab({ me, players }) {
-  const history = me.pdvHistory || [];
-  const ranking = [...players].sort((a, b) => (b.pdv || 0) - (a.pdv || 0));
-  const totalPdv = players.reduce((s, p) => s + (p.pdv || 0), 0);
-  const targetPdv = players.length * 10;
-  const totals = useMemo(() => { const sums = {}; history.forEach(e => { sums[e.source] = (sums[e.source] || 0) + e.amount; }); return sums; }, [history]);
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("div", { className: "text-center" },
-      React.createElement("h3", { className: "text-2xl font-bold text-gray-800" }, "🏆 Points de Victoire"),
-      React.createElement("div", { className: "text-5xl font-bold text-yellow-500 my-4" }, me.pdv || 0),
-      React.createElement("div", { className: "bg-purple-100 rounded-lg p-3" },
-        React.createElement("div", { className: "text-sm text-purple-700 font-bold" }, "Total: " + totalPdv + " / " + targetPdv),
-        React.createElement("div", { className: "w-full bg-purple-200 rounded-full h-3 mt-2" }, React.createElement("div", { className: "bg-purple-600 h-3 rounded-full", style: { width: Math.min(100, (totalPdv / targetPdv) * 100) + "%" } })),
-        React.createElement("div", { className: "text-xs text-purple-600 mt-2" }, "🏁 Fin à " + targetPdv + " PDV")
-      )
-    ),
-    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-3" }, "📊 Répartition"),
-      React.createElement("div", { className: "grid grid-cols-3 gap-2" },
-        Object.entries(PDV_SOURCES).map(([k, info]) => React.createElement("div", { key: k, className: "bg-white rounded-lg p-2 text-center" },
-          React.createElement("div", { className: "text-xl" }, info.emoji),
-          React.createElement("div", { className: "text-xl font-bold " + info.color }, totals[k] || 0),
-          React.createElement("div", { className: "text-xs text-gray-500" }, info.label)
-        ))
-      )
-    ),
-    React.createElement("div", { className: "bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-4 text-white" },
-      React.createElement("h4", { className: "font-bold mb-3" }, "🏅 Classement"),
-      React.createElement("div", { className: "space-y-2" },
-        ranking.map((p, i) => React.createElement("div", { key: p.oderId || i, className: "flex items-center gap-3 p-2 rounded-lg " + (p.oderId === me.oderId ? 'bg-white bg-opacity-20' : '') },
-          React.createElement("span", { className: "text-lg font-bold " + (i === 0 ? 'text-yellow-300' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-300' : '') }, i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1)),
-          React.createElement("span", { className: "text-xl" }, p.character?.emoji),
-          React.createElement("span", { className: "flex-1" }, p.name),
-          React.createElement("span", { className: "font-bold text-xl" }, p.pdv || 0)
-        ))
-      )
-    ),
-    history.length > 0 && React.createElement("div", null,
-      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "📜 Historique (" + history.length + ")"),
-      React.createElement("div", { className: "space-y-2 max-h-48 overflow-y-auto" },
-        [...history].reverse().map(e => {
-          const info = PDV_SOURCES[e.source] || PDV_SOURCES.BONUS;
-          return React.createElement("div", { key: e.id, className: "flex items-center gap-3 bg-gray-50 rounded-lg p-2" },
-            React.createElement("span", { className: "text-xl" }, info.emoji),
-            React.createElement("span", { className: "font-bold " + info.color }, "+" + e.amount),
-            React.createElement("span", { className: "text-gray-600 text-sm" }, info.label)
+    // Stats Section
+    React.createElement("div", { className: "bg-blue-50 rounded-2xl p-6" },
+      React.createElement("h3", { className: "text-xl font-bold text-gray-800 mb-4" }, "Statistiques"),
+      React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+        Object.entries(STAT_NAMES).map(([key, name]) => {
+          const baseStat = me.stats?.[key] || 0;
+          const effectsBonus = (me.effects || []).filter(e => e.stat === key).reduce((sum, e) => sum + e.delta, 0);
+          const total = baseStat + effectsBonus;
+          return React.createElement("div", { key, className: "bg-white rounded-lg p-3" },
+            React.createElement("div", { className: "text-sm text-gray-600 mb-1" }, name),
+            React.createElement("div", { className: "flex items-center justify-between" },
+              React.createElement("span", { className: "text-lg font-bold text-gray-700" }, baseStat >= 0 ? "+" + baseStat : baseStat),
+              effectsBonus !== 0 && React.createElement("span", { className: "text-sm " + (effectsBonus > 0 ? 'text-green-600' : 'text-red-600') }, effectsBonus > 0 ? "+" + effectsBonus : effectsBonus),
+              React.createElement("span", { className: "text-lg font-bold " + (total >= 0 ? 'text-green-600' : 'text-red-600') }, "= " + (total >= 0 ? "+" + total : total))
+            )
           );
         })
       )
+    ),
+    // Effects Section
+    React.createElement("div", null,
+      React.createElement("div", { className: "flex items-center justify-between mb-3" },
+        React.createElement("h3", { className: "text-xl font-bold text-gray-800" }, "États actifs (" + (me.effects || []).length + ")"),
+        React.createElement("button", { onClick: () => setShowAddEffect(!showAddEffect), className: "px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 text-sm" }, showAddEffect ? '✕ Annuler' : '+ Ajouter')
+      ),
+      showAddEffect && React.createElement("div", { className: "bg-gray-50 rounded-xl p-4 mb-4" },
+        React.createElement("div", { className: "space-y-3" },
+          React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+            React.createElement("button", { onClick: () => setNewEffect({ ...newEffect, type: 'BLESS' }), className: "py-2 rounded-lg font-semibold " + (newEffect.type === 'BLESS' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700') }, "✨ Bénédiction (+2)"),
+            React.createElement("button", { onClick: () => setNewEffect({ ...newEffect, type: 'CURSE' }), className: "py-2 rounded-lg font-semibold " + (newEffect.type === 'CURSE' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700') }, "💀 Malédiction (-2)")
+          ),
+          React.createElement("select", { value: newEffect.stat, onChange: (e) => setNewEffect({ ...newEffect, stat: e.target.value }), className: "w-full px-3 py-2 border-2 border-gray-300 rounded-lg" },
+            Object.entries(STAT_NAMES).map(([key, name]) => React.createElement("option", { key, value: key }, name))
+          ),
+          React.createElement("input", { type: "text", value: newEffect.name, onChange: (e) => setNewEffect({ ...newEffect, name: e.target.value }), placeholder: "Nom de l'état", className: "w-full px-3 py-2 border-2 border-gray-300 rounded-lg" }),
+          React.createElement("button", { onClick: addEffect, className: "w-full py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700" }, "Ajouter l'état")
+        )
+      ),
+      (me.effects || []).length === 0 ? React.createElement("p", { className: "text-gray-500 text-center py-4" }, "Aucun état actif") :
+      React.createElement("div", { className: "space-y-2" },
+        (me.effects || []).map(effect => React.createElement("div", { key: effect.id, className: "rounded-lg p-3 flex items-center justify-between " + (effect.type === 'BLESS' ? 'bg-green-50 border-2 border-green-200' : 'bg-red-50 border-2 border-red-200') },
+          React.createElement("div", null,
+            React.createElement("span", { className: "font-bold text-gray-800" }, (effect.type === 'BLESS' ? '✨' : '💀') + " " + effect.name),
+            React.createElement("p", { className: "text-sm text-gray-600" }, STAT_NAMES[effect.stat] + ": " + (effect.delta > 0 ? "+" + effect.delta : effect.delta))
+          ),
+          React.createElement("button", { onClick: () => removeEffect(effect.id), className: "px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700" }, "✕")
+        ))
+      )
+    ),
+    // Skills Section
+    React.createElement("div", null,
+      React.createElement("h3", { className: "text-xl font-bold text-gray-800 mb-3" }, "Capacités"),
+      React.createElement("div", { className: "bg-blue-50 rounded-xl p-4" },
+        React.createElement("p", { className: "text-sm text-gray-600 mb-3" }, React.createElement("strong", null, "Rôle:"), " " + me.character?.role),
+        React.createElement("p", { className: "text-sm text-gray-700 mb-4 italic" }, me.character?.concept),
+        React.createElement("div", { className: "space-y-2" },
+          (me.skills || []).map(skill => React.createElement("div", { key: skill.id, className: "bg-white rounded-lg p-3 flex items-center justify-between" },
+            React.createElement("p", { className: "text-sm text-gray-700 flex-1" }, skill.description),
+            React.createElement("button", { onClick: () => toggleSkill(skill.id), className: "ml-3 px-3 py-1 rounded-lg font-semibold text-xs " + (skill.status === 'AVAILABLE' ? 'bg-green-600 text-white' : 'bg-gray-400 text-white') }, skill.status === 'AVAILABLE' ? 'Dispo' : 'Indispo')
+          ))
+        ),
+        React.createElement("p", { className: "text-xs text-gray-600 mt-4 italic" }, React.createElement("strong", null, "Style:"), " " + me.character?.style)
+      )
+    ),
+    // Quests Section
+    React.createElement("div", null,
+      React.createElement("h3", { className: "text-xl font-bold text-gray-800 mb-3" }, "Mes quêtes (" + (me.quests || []).length + "/2)"),
+      (me.quests || []).length === 0 ? React.createElement("p", { className: "text-gray-500 text-center py-4" }, "Aucune quête") :
+      React.createElement("div", { className: "space-y-2" },
+        (me.quests || []).map(quest => React.createElement("div", { key: quest.id, className: "rounded-lg p-3 bg-gray-50 border-2 border-gray-300" },
+          React.createElement("p", { className: "text-sm text-gray-700" }, quest.text)
+        ))
+      )
     )
   );
 }
 
-// Render
-createRoot(document.getElementById('root')).render(React.createElement(App));
+// ============================================================================
+// RENDER
+// ============================================================================
+const root = createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
   </script>
 </body>
 </html>
