@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quêtes d'Anomalies - Multijoueur Firebase</title>
+  <title>Quêtes d'Anomalies - Firebase Multijoueur v3.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -15,24 +15,23 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     .animate-spin { animation: spin 1s linear infinite; }
-    .dice-roll { animation: spin 0.5s ease-out; }
   </style>
 </head>
 <body class="bg-gray-100">
   <div id="root"></div>
   <script>
-const { useState, useEffect, useMemo, useCallback } = React;
+const { useState, useEffect, useMemo } = React;
 const { createRoot } = ReactDOM;
 
 // ============= FIREBASE CONFIG =============
 const firebaseConfig = {
-  apiKey: "__FIREBASE_API_KEY__",
-  authDomain: "__FIREBASE_AUTH_DOMAIN__",
-  databaseURL: "__FIREBASE_DATABASE_URL__",
-  projectId: "__FIREBASE_PROJECT_ID__",
-  storageBucket: "__FIREBASE_STORAGE_BUCKET__",
-  messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
-  appId: "__FIREBASE_APP_ID__"
+  apiKey: "AIzaSyCIHNdmKviN2wnhfPBKLVjZkqkzgYByKKo",
+  authDomain: "quetes-anomalies.firebaseapp.com",
+  databaseURL: "https://quetes-anomalies-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "quetes-anomalies",
+  storageBucket: "quetes-anomalies.firebasestorage.app",
+  messagingSenderId: "1044664702149",
+  appId: "1:1044664702149:web:2a26e29624ade498c149e0"
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -40,197 +39,88 @@ const auth = firebase.auth();
 const db = firebase.database();
 
 // ============= CONSTANTS =============
-const CHARACTERS = {
-  CHASSEUR: {
-    name: "Le Chasseur", pvMax: 6, role: "Harceleur – Quêtes – Combat à distance",
-    concept: "Spécialiste du contrôle spatial et de la pression indirecte.",
-    skills: ["Peut attaquer à distance d'un biome", "Ne subit aucun dégât de riposte lors d'une attaque à distance", "+1 permanent lors des attaques contre les monstres de quête"],
-    style: "Tactique, opportuniste, faible en défense directe.", questBonus: 1, noCounterDamage: true
-  },
-  MARCHAND: {
-    name: "Le Marchand", pvMax: 6, role: "Économie – Monopoles – Fin de partie",
-    concept: "Transforme l'or en levier stratégique.",
-    skills: ["Gagne +4 or en début de partie et à chaque passage par le Départ", "Peut acheter des territoires contre de l'or", "+1 PDV supplémentaire par monopole de ressources"],
-    style: "Gestionnaire, sécurisant, extrêmement dangereux.", goldBonus: 4, monopoleBonus: 1
-  },
-  HOMME_BETE: {
-    name: "L'Homme-bête", pvMax: 10, role: "Berserker – Combat prolongé",
-    concept: "Convertit sa vitalité en puissance brute.",
-    skills: ["Peut augmenter son jet en sacrifiant ses PV", "Se soigne jusqu'à 2 PV en cas de victoire", "Inflige 1 dégât de riposte quand attaqué"],
-    style: "Agressif, résilient, très difficile à éliminer.", counterDamage: 1, healOnWin: 2
-  },
-  CHEVALIER: {
-    name: "Le Chevalier", pvMax: 10, role: "Conquête – Contrôle de carte",
-    concept: "Chaque victoire militaire devient une expansion.",
-    skills: ["Obtient directement le territoire adverse conquis", "+1 lors des attaques de territoires neutres", "+1 PDV par territoire avec monopole de biome"],
-    style: "Expansionniste, dominateur, puissant.", territoryBonus: 1, biomeBonus: 1
-  },
-  VICAIRE: {
-    name: "Le Vicaire", pvMax: 8, role: "Support – Optimisation – Contrôle",
-    concept: "Manipule la chance et stabilise les situations.",
-    skills: ["Relance un dé stat en sacrifiant 1 ressource", "Bénédiction (recharge au Départ)", "+1 PDV supplémentaire par quête accomplie"],
-    style: "Flexible, diplomatique, fort en optimisation.", questPdvBonus: 1, canBless: true
-  },
-  HERETIQUE: {
-    name: "L'Hérétique", pvMax: 8, role: "Sabotage – Malédictions – Assassinat",
-    concept: "Affaiblit avant d'achever.",
-    skills: ["Choisit la statistique en combat joueur", "Malédiction (coût 3 PV, recharge au Départ)", "+1 PDV si kill d'un joueur maudit"],
-    style: "Cruel, calculateur, punitif en duel.", chooseStat: true, canCurse: true, cursedKillBonus: 1
-  }
-};
-
 const STAT_NAMES = { endurance: "Endurance", force: "Force", vitesse: "Vitesse", perception: "Perception", sagesse: "Sagesse", intelligence: "Intelligence" };
 const STAT_MAPPING = { "Endurance": "endurance", "Force": "force", "Agilité": "vitesse", "Perception": "perception", "Sagesse": "sagesse", "Intelligence": "intelligence" };
 const STATISTIQUES = ["Endurance", "Force", "Vitesse", "Perception", "Sagesse", "Intelligence"];
+const PDV_SOURCES = { KILL: { label: "Élimination", emoji: "💀", color: "text-red-600" }, QUEST_COMBAT: { label: "Quête combat", emoji: "⚔️", color: "text-orange-600" }, QUEST_EXCHANGE: { label: "Quête échange", emoji: "🔄", color: "text-blue-600" }, TERRITORY: { label: "Territoire", emoji: "🏰", color: "text-green-600" }, BOSS: { label: "Boss", emoji: "🐉", color: "text-yellow-600" }, BONUS: { label: "Bonus", emoji: "✨", color: "text-pink-600" }, START: { label: "Départ", emoji: "🏁", color: "text-teal-600" } };
+const BIOMES = { FORET: { name: "Forêt aux arbres Cuivrés", resource: "cuivre", color: "from-amber-600 to-amber-800", emoji: "🌳" }, DESERT: { name: "Désert aux sables Argentés", resource: "argent", color: "from-gray-400 to-gray-600", emoji: "🏜️" }, MONTAGNE: { name: "Montagne aux roches Obsidiennes", resource: "obsidienne", color: "from-slate-700 to-slate-900", emoji: "⛰️" } };
+const BOSSES = { FORET: { name: "Gardien de la Forêt", difficulty: 6, pdv: 3, emoji: "🌲" }, DESERT: { name: "Titan du Désert", difficulty: 8, pdv: 4, emoji: "🏜️" }, MONTAGNE: { name: "Seigneur de la Montagne", difficulty: 10, pdv: 5, emoji: "⛰️" } };
+const OBJECTIVES = [{ id: 'OBJ_OR', resource: 'or', amount: 12, pdv: 3, label: '12 Or', emoji: '💰' }, { id: 'OBJ_CUIVRE', resource: 'cuivre', amount: 9, pdv: 3, label: '9 Cuivre', emoji: '🥉' }, { id: 'OBJ_ARGENT', resource: 'argent', amount: 6, pdv: 3, label: '6 Argent', emoji: '🥈' }, { id: 'OBJ_OBSIDIENNE', resource: 'obsidienne', amount: 3, pdv: 3, label: '3 Obsidienne', emoji: '⬛' }];
+const MAJOR_EVENTS = ["🎭 La Fresque s'illumine ! Tous les joueurs gagnent +2 Or.", "🎭 Un tremblement secoue le plateau ! Chaque joueur perd 1 ressource.", "🎭 Bénédiction divine ! Le joueur actif gagne une Bénédiction.", "🎭 Malédiction ancestrale ! Le joueur en tête reçoit une Malédiction.", "🎭 Pluie de ressources !", "🎭 Marché noir ! Les échanges coûtent 50% moins cher.", "🎭 Rage des monstres ! +2 difficulté ce tour.", "🎭 Faveur des dieux ! +3 au prochain jet.", "🎭 Eclipse totale ! Malédictions levées.", "🎭 Résurrection !"];
+const RESOURCE_MAPPING = { "Pièce d'Or": { key: "or" }, "Ecorce Cuivrée": { key: "cuivre" }, "Sable Argenté": { key: "argent" }, "Roche Obsidienne": { key: "obsidienne" } };
+const BASE_GOLD = 10;
 
-const BIOMES = {
-  FORET: { name: "Forêt Cuivrée", emoji: "🌳", color: "from-green-600 to-green-800", resource: "cuivre" },
-  DESERT: { name: "Désert Argenté", emoji: "🏜️", color: "from-yellow-500 to-orange-600", resource: "argent" },
-  MONTAGNE: { name: "Montagne Obsidienne", emoji: "⛰️", color: "from-gray-700 to-gray-900", resource: "obsidienne" }
+const CHARACTERS = {
+  CHASSEUR: { name: "Le Chasseur", pvMax: 6, role: "Harceleur – Quêtes – Combat à distance", concept: "Spécialiste du contrôle spatial.", skills: ["Attaque à distance", "Aucun dégât de riposte à distance", "+1 permanent à distance"] },
+  MARCHAND: { name: "Le Marchand", pvMax: 6, role: "Économie – Monopoles", concept: "Transforme l'or en levier stratégique.", skills: ["+4 Or au départ et à chaque Départ", "Achète territoires neutres", "Achète territoires adverses pour 10 Or"] },
+  HOMME_BETE: { name: "L'Homme-bête", pvMax: 10, role: "Berserker – Combat prolongé", concept: "Convertit sa vitalité en puissance.", skills: ["Sacrifie des PV pour +jet", "Se soigne de 2 PV sur attaque réussie", "Inflige 1 dégât de riposte"] },
+  CHEVALIER: { name: "Le Chevalier", pvMax: 10, role: "Conquête – Contrôle de carte", concept: "Chaque victoire = expansion.", skills: ["Capture le territoire adverse", "+1 vs territoires neutres", "+1 PDV/biome en fin de partie"] },
+  VICAIRE: { name: "Le Vicaire", pvMax: 8, role: "Support – Optimisation", concept: "Manipule la chance.", skills: ["Relance la stat (coût: 1 ressource)", "Bénédiction", "+1 PDV par quête"] },
+  HERETIQUE: { name: "L'Hérétique", pvMax: 8, role: "Sabotage – Assassinat", concept: "Affaiblit avant d'achever.", skills: ["Choisit la stat en attaque joueur", "Malédiction (coût: 3 PV)", "+1 PDV sur kill maudit"] }
 };
 
-const RESOURCE_MAPPING = {
-  "Pièce d'Or": { key: "or", displayName: "Pièces d'Or" },
-  "Ecorce Cuivrée": { key: "cuivre", displayName: "Ecorce Cuivrée" },
-  "Sable Argenté": { key: "argent", displayName: "Sable Argenté" },
-  "Roche Obsidienne": { key: "obsidienne", displayName: "Roche Obsidienne" }
+const ANOMALIES = ["Soignez 2 [Point de vie].", "Soignez 4 [Point de vie].", "Soignez 6 [Point de vie].", "Perdez 2 [Point de vie].", "Perdez 4 [Point de vie].", "Perdez 6 [Point de vie].", "Obtenez [Bénédiction].", "Obtenez [Bénédiction].", "Obtenez [Malédiction].", "Obtenez [Malédiction].", "Gagnez 8 [Pièce d'Or].", "Gagnez 4 [Pièce d'Or].", "Gagnez 3 [Ecorce Cuivrée].", "Gagnez 2 [Sable Argenté].", "Gagnez 1 [Roche Obsidienne].", "Perdez 4 [Pièce d'Or].", "Perdez 2 [Ecorce Cuivrée].", "Perdez 1 [Sable Argenté]."];
+const QUETES = ["Dans le territoire [Forêt], difficulté 6 pour 3 [Point de victoire].", "Dans le territoire [Forêt], difficulté 8 pour 4 [Point de victoire].", "Dans le territoire [Désert], difficulté 6 pour 3 [Point de victoire].", "Dans le territoire [Désert], difficulté 8 pour 4 [Point de victoire].", "Dans le territoire [Montagne], difficulté 6 pour 3 [Point de victoire].", "Dans le territoire [Montagne], difficulté 10 pour 5 [Point de victoire].", "Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].", "Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].", "Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].", "Echanger 3 [Ecorce Cuivrée] contre 1 [Point de victoire].", "Echanger 4 [Sable Argenté] contre 2 [Point de victoire].", "Echanger 2 [Sable Argenté] contre 1 [Point de victoire].", "Echanger 2 [Roche Obsidienne] contre 2 [Point de victoire].", "Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire]."];
+
+// ============= RULES ENGINE =============
+const rulesEngine = {
+  getAttackBonus: (player, ctx) => { let bonus = 0; if (player.characterKey === 'CHASSEUR' && ctx.isRanged) bonus += 1; if (player.characterKey === 'CHEVALIER' && ctx.isNeutral) bonus += 1; return { bonus }; },
+  getHealOnSuccess: (player) => player.characterKey === 'HOMME_BETE' ? 2 : 0,
+  getKillBonus: (player, defender) => player.characterKey === 'HERETIQUE' && (defender.effects||[]).some(e => e.type === 'CURSE') ? 1 : 0,
+  getQuestBonus: (player) => player.characterKey === 'VICAIRE' ? 1 : 0,
+  getStartGold: (charKey) => charKey === 'MARCHAND' ? BASE_GOLD + 4 : BASE_GOLD,
+  getPassBonus: (player) => player.characterKey === 'MARCHAND' ? { or: 4 } : {},
+  canChooseStat: (player) => player.characterKey === 'HERETIQUE',
+  canSacrificePv: (player) => player.characterKey === 'HOMME_BETE',
+  canAttackRanged: (player) => player.characterKey === 'CHASSEUR',
+  canBuyTerritory: (player) => player.characterKey === 'MARCHAND',
+  canReroll: (player) => player.characterKey === 'VICAIRE',
+  canBless: (player) => player.characterKey === 'VICAIRE',
+  canCurse: (player) => player.characterKey === 'HERETIQUE'
 };
 
-const PDV_SOURCES = {
-  COMBAT: { label: "Combat", emoji: "⚔️", color: "text-red-600" },
-  QUEST: { label: "Quête", emoji: "📜", color: "text-green-600" },
-  TERRITORY: { label: "Territoire", emoji: "🏰", color: "text-blue-600" },
-  MONOPOLE: { label: "Monopole", emoji: "👑", color: "text-yellow-600" },
-  BONUS: { label: "Bonus", emoji: "✨", color: "text-purple-600" }
-};
-
-const ANOMALIES = ["Soignez 1 [Point de vie].","Soignez 2 [Point de vie].","Soignez 3 [Point de vie].","Soignez 4 [Point de vie].","Soignez 5 [Point de vie].","Soignez 6 [Point de vie].","Soignez 7 [Point de vie].","Soignez 8 [Point de vie].","Soignez 9 [Point de vie].","Perdez 1 [Point de vie].","Perdez 2 [Point de vie].","Perdez 3 [Point de vie].","Perdez 4 [Point de vie].","Perdez 5 [Point de vie].","Perdez 6 [Point de vie].","Perdez 7 [Point de vie].","Perdez 8 [Point de vie].","Perdez 9 [Point de vie].","Avancez de 1 [Case].","Avancez de 2 [Case].","Avancez de 3 [Case].","Avancez de 4 [Case].","Avancez de 5 [Case].","Avancez de 6 [Case].","Avancez de 7 [Case].","Avancez de 8 [Case].","Avancez de 9 [Case].","Reculez de 1 [Case].","Reculez de 2 [Case].","Reculez de 3 [Case].","Reculez de 4 [Case].","Reculez de 5 [Case].","Reculez de 6 [Case].","Reculez de 7 [Case].","Reculez de 8 [Case].","Reculez de 9 [Case].","Obtenez [Bénédiction] de [Endurance].","Obtenez [Bénédiction] de [Force].","Obtenez [Bénédiction] de [Agilité].","Obtenez [Bénédiction] de [Perception].","Obtenez [Bénédiction] de [Sagesse].","Obtenez [Bénédiction] de [Intelligence].","Obtenez [Malédiction] de [Endurance].","Obtenez [Malédiction] de [Force].","Obtenez [Malédiction] de [Agilité].","Obtenez [Malédiction] de [Perception].","Obtenez [Malédiction] de [Sagesse].","Obtenez [Malédiction] de [Intelligence].","Obtenez l'objet [Clefs de la prison].","Allez en [Prison].","Obtenez l'objet [Clefs de la prison].","Allez en [Prison].","Obtenez l'objet [Clefs de la prison].","Allez en [Prison].","Gagnez 8 [Pièce d'Or].","Gagnez 4 [Pièce d'Or].","Gagnez 6 [Ecorce Cuivrée].","Gagnez 3 [Ecorce Cuivrée].","Gagnez 4 [Sable Argenté].","Gagnez 2 [Sable Argenté].","Gagnez 2 [Roche Obsidienne].","Gagnez 1 [Roche Obsidienne].","Perdez 8 [Pièce d'Or].","Perdez 4 [Pièce d'Or].","Perdez 6 [Ecorce Cuivrée].","Perdez 3 [Ecorce Cuivrée].","Perdez 4 [Sable Argenté].","Perdez 2 [Sable Argenté].","Perdez 2 [Roche Obsidienne].","Perdez 1 [Roche Obsidienne]."];
-
-const QUETES = ["Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 en [Endurance] pour gagner 3 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 en [Force] pour gagner 3 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 en [Agilité] pour gagner 3 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 en [Perception] pour gagner 3 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 en [Sagesse] pour gagner 3 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 en [Intelligence] pour gagner 3 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 en [Endurance] pour gagner 4 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 en [Force] pour gagner 4 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 en [Agilité] pour gagner 4 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 en [Perception] pour gagner 4 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 en [Sagesse] pour gagner 4 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 en [Intelligence] pour gagner 4 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 en [Endurance] pour gagner 5 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 en [Force] pour gagner 5 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 en [Agilité] pour gagner 5 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 en [Perception] pour gagner 5 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 en [Sagesse] pour gagner 5 [Point de victoire].","Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 en [Intelligence] pour gagner 5 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 en [Endurance] pour gagner 3 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 en [Force] pour gagner 3 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 en [Agilité] pour gagner 3 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 en [Perception] pour gagner 3 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 en [Sagesse] pour gagner 3 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 en [Intelligence] pour gagner 3 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 en [Endurance] pour gagner 4 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 en [Force] pour gagner 4 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 en [Agilité] pour gagner 4 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 en [Perception] pour gagner 4 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 en [Sagesse] pour gagner 4 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 en [Intelligence] pour gagner 4 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 en [Endurance] pour gagner 5 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 en [Force] pour gagner 5 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 en [Agilité] pour gagner 5 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 en [Perception] pour gagner 5 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 en [Sagesse] pour gagner 5 [Point de victoire].","Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 en [Intelligence] pour gagner 5 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 6 en [Endurance] pour gagner 3 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 6 en [Force] pour gagner 3 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 6 en [Agilité] pour gagner 3 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 6 en [Perception] pour gagner 3 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 6 en [Sagesse] pour gagner 3 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 6 en [Intelligence] pour gagner 3 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 8 en [Endurance] pour gagner 4 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 8 en [Force] pour gagner 4 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 8 en [Agilité] pour gagner 4 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 8 en [Perception] pour gagner 4 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 8 en [Sagesse] pour gagner 4 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 8 en [Intelligence] pour gagner 4 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 10 en [Endurance] pour gagner 5 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 10 en [Force] pour gagner 5 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 10 en [Agilité] pour gagner 5 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 10 en [Perception] pour gagner 5 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 10 en [Sagesse] pour gagner 5 [Point de victoire].","Dans le territoire [Montagne aux roches Obsdiennes], éliminer la créature de difficulté 10 en [Intelligence] pour gagner 5 [Point de victoire].","Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].","Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].","Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].","Echanger 3 [Ecorce Cuivrée] contre 1 [Point de victoire].","Echanger 4 [Sable Argenté] contre 2 [Point de victoire].","Echanger 2 [Sable Argenté] contre 1 [Point de victoire].","Echanger 2 [Roche Obsidienne] contre 2 [Point de victoire].","Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire].","Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].","Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].","Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].","Echanger 3 [Ecorce Cuivrée] contre 1 [Point de victoire].","Echanger 4 [Sable Argenté] contre 2 [Point de victoire].","Echanger 2 [Sable Argenté] contre 1 [Point de victoire].","Echanger 2 [Roche Obsidienne] contre 2 [Point de victoire].","Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire]."];
-
-const MAJOR_EVENTS = [
-  "🌋 Éruption volcanique ! Tous les joueurs perdent 2 PV.",
-  "🌈 Arc-en-ciel magique ! Tous les joueurs gagnent 1 ressource au choix.",
-  "👻 Invasion spectrale ! Le prochain combat a +2 de difficulté.",
-  "💰 Pluie d'or ! Tous les joueurs gagnent 3 pièces d'or.",
-  "🌪️ Tempête mystique ! Toutes les bénédictions sont annulées.",
-  "🎭 Carnaval des masques ! Les joueurs échangent leurs positions.",
-  "⚡ Foudre divine ! Le joueur avec le plus de PDV perd 1 PDV.",
-  "🌸 Floraison magique ! Tous les joueurs se soignent de 3 PV."
-];
-
-// ============= UTILITY FUNCTIONS =============
-function genCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
-
+// ============= HELPERS =============
 function parseAnomaly(text) {
-  const healMatch = text.match(/Soignez (\d+) \[Point de vie\]/);
-  if (healMatch) return { type: 'heal', amount: parseInt(healMatch[1]) };
-  const damageMatch = text.match(/Perdez (\d+) \[Point de vie\]/);
-  if (damageMatch) return { type: 'damage', amount: parseInt(damageMatch[1]) };
-  const blessMatch = text.match(/Obtenez \[Bénédiction\] de \[(.+?)\]/);
-  if (blessMatch) return { type: 'bless', stat: STAT_MAPPING[blessMatch[1]], statName: blessMatch[1] };
-  const curseMatch = text.match(/Obtenez \[Malédiction\] de \[(.+?)\]/);
-  if (curseMatch) return { type: 'curse', stat: STAT_MAPPING[curseMatch[1]], statName: curseMatch[1] };
-  const gainOrMatch = text.match(/Gagnez (\d+) \[Pièce d'Or\]/);
-  if (gainOrMatch) return { type: 'gainOr', amount: parseInt(gainOrMatch[1]) };
-  const loseOrMatch = text.match(/Perdez (\d+) \[Pièce d'Or\]/);
-  if (loseOrMatch) return { type: 'loseOr', amount: parseInt(loseOrMatch[1]) };
-  const gainCuivreMatch = text.match(/Gagnez (\d+) \[Ecorce Cuivrée\]/);
-  if (gainCuivreMatch) return { type: 'gainCuivre', amount: parseInt(gainCuivreMatch[1]) };
-  const loseCuivreMatch = text.match(/Perdez (\d+) \[Ecorce Cuivrée\]/);
-  if (loseCuivreMatch) return { type: 'loseCuivre', amount: parseInt(loseCuivreMatch[1]) };
-  const gainArgentMatch = text.match(/Gagnez (\d+) \[Sable Argenté\]/);
-  if (gainArgentMatch) return { type: 'gainArgent', amount: parseInt(gainArgentMatch[1]) };
-  const loseArgentMatch = text.match(/Perdez (\d+) \[Sable Argenté\]/);
-  if (loseArgentMatch) return { type: 'loseArgent', amount: parseInt(loseArgentMatch[1]) };
-  const gainObsidienneMatch = text.match(/Gagnez (\d+) \[Roche Obsidienne\]/);
-  if (gainObsidienneMatch) return { type: 'gainObsidienne', amount: parseInt(gainObsidienneMatch[1]) };
-  const loseObsidienneMatch = text.match(/Perdez (\d+) \[Roche Obsidienne\]/);
-  if (loseObsidienneMatch) return { type: 'loseObsidienne', amount: parseInt(loseObsidienneMatch[1]) };
-  return { type: 'other', text };
+  let m;
+  if (m = text.match(/Soignez (\d+)/)) return { type: 'heal', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Point de vie\]/)) return { type: 'damage', amount: +m[1] };
+  if (text.includes('[Bénédiction]')) { const stats = Object.keys(STAT_NAMES); return { type: 'bless', stat: stats[Math.floor(Math.random() * stats.length)] }; }
+  if (text.includes('[Malédiction]')) { const stats = Object.keys(STAT_NAMES); return { type: 'curse', stat: stats[Math.floor(Math.random() * stats.length)] }; }
+  if (m = text.match(/Gagnez (\d+) \[Pièce/)) return { type: 'gain', resource: 'or', amount: +m[1] };
+  if (m = text.match(/Gagnez (\d+) \[Ecorce/)) return { type: 'gain', resource: 'cuivre', amount: +m[1] };
+  if (m = text.match(/Gagnez (\d+) \[Sable/)) return { type: 'gain', resource: 'argent', amount: +m[1] };
+  if (m = text.match(/Gagnez (\d+) \[Roche/)) return { type: 'gain', resource: 'obsidienne', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Pièce/)) return { type: 'lose', resource: 'or', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Ecorce/)) return { type: 'lose', resource: 'cuivre', amount: +m[1] };
+  if (m = text.match(/Perdez (\d+) \[Sable/)) return { type: 'lose', resource: 'argent', amount: +m[1] };
+  return { type: 'other' };
 }
 
 function parseQuest(text) {
   const pdvMatch = text.match(/(\d+) \[Point de victoire\]/);
-  const pdv = pdvMatch ? parseInt(pdvMatch[1]) : 0;
-  const exchangeMatch = text.match(/Echanger (\d+) \[(.+?)\] contre/);
-  if (exchangeMatch) {
-    const amount = parseInt(exchangeMatch[1]);
-    const resourceInfo = RESOURCE_MAPPING[exchangeMatch[2]];
-    if (resourceInfo) return { pdv, isExchange: true, isCombat: false, resourceKey: resourceInfo.key, resourceDisplayName: resourceInfo.displayName, resourceAmount: amount };
-  }
-  const combatMatch = text.match(/éliminer la créature de difficulté (\d+) en \[(.+?)\]/);
-  if (combatMatch) {
-    const difficulty = parseInt(combatMatch[1]);
-    const statKey = STAT_MAPPING[combatMatch[2]];
-    return { pdv, isExchange: false, isCombat: true, difficulty, stat: statKey, statName: combatMatch[2] };
-  }
+  const pdv = pdvMatch ? +pdvMatch[1] : 0;
+  const exchMatch = text.match(/Echanger (\d+) \[(.+?)\] contre/);
+  if (exchMatch) { const resInfo = RESOURCE_MAPPING[exchMatch[2]]; return { pdv, isExchange: true, isCombat: false, resourceKey: resInfo?.key, resourceAmount: +exchMatch[1] }; }
+  const combatMatch = text.match(/difficulté (\d+) pour/);
+  if (combatMatch) { const stats = Object.keys(STAT_NAMES); return { pdv, isExchange: false, isCombat: true, difficulty: +combatMatch[1], stat: stats[Math.floor(Math.random() * stats.length)] }; }
   return { pdv, isExchange: false, isCombat: false };
 }
 
-function countTerritoriesByBiome(territories) {
-  const counts = { FORET: 0, DESERT: 0, MONTAGNE: 0 };
-  (territories || []).forEach(t => { if (counts[t.biome] !== undefined) counts[t.biome]++; });
-  return counts;
-}
-
-function getRandomAvailableResource(player) {
-  const available = [];
-  if (player.or > 0) available.push('or');
-  if (player.cuivre > 0) available.push('cuivre');
-  if (player.argent > 0) available.push('argent');
-  if (player.obsidienne > 0) available.push('obsidienne');
-  return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
-}
-
-// ============= RULES ENGINE =============
-const rulesEngine = {
-  canBless: (player) => player.characterKey === 'VICAIRE',
-  canCurse: (player) => player.characterKey === 'HERETIQUE',
-  canChooseStat: (player) => player.characterKey === 'HERETIQUE',
-  canReroll: (player) => player.characterKey === 'VICAIRE',
-  getQuestBonus: (player) => player.characterKey === 'CHASSEUR' ? 1 : 0,
-  getTerritoryBonus: (player, isNeutral) => (player.characterKey === 'CHEVALIER' && isNeutral) ? 1 : 0,
-  getCounterDamage: (player) => player.characterKey === 'HOMME_BETE' ? 1 : 0,
-  getHealOnWin: (player) => player.characterKey === 'HOMME_BETE' ? 2 : 0,
-  getGoldOnStart: (player) => player.characterKey === 'MARCHAND' ? 4 : 0,
-  getMonopoleBonus: (player) => player.characterKey === 'MARCHAND' ? 3 : 2,
-  getQuestPdvBonus: (player) => player.characterKey === 'VICAIRE' ? 1 : 0,
-  getCursedKillBonus: (player, target) => {
-    if (player.characterKey !== 'HERETIQUE') return 0;
-    const isCursed = (target.effects || []).some(e => e.type === 'CURSE');
-    return isCursed ? 1 : 0;
-  },
-  computeEffectiveStats: (player) => {
-    const effective = {};
-    Object.keys(STAT_NAMES).forEach(key => {
-      const base = (player.baseStats && player.baseStats[key]) || 0;
-      const bonus = (player.effects || []).filter(e => e.stat === key).reduce((sum, e) => sum + e.delta, 0);
-      effective[key] = base + bonus;
-    });
-    return effective;
-  }
-};
+function countTerritoriesByBiome(territories) { const c = { FORET: 0, DESERT: 0, MONTAGNE: 0 }; (territories || []).forEach(t => { if (c[t.biome] !== undefined) c[t.biome]++; }); return c; }
+function genCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)]; return c; }
+function ensureArray(data, len = 0) { if (Array.isArray(data)) return data; if (data && typeof data === 'object') return Object.values(data); return len > 0 ? Array(len).fill(null) : []; }
+function getRandomResource(player) { const a = []; if (player.or > 0) a.push('or'); if (player.cuivre > 0) a.push('cuivre'); if (player.argent > 0) a.push('argent'); if (player.obsidienne > 0) a.push('obsidienne'); return a.length > 0 ? a[Math.floor(Math.random() * a.length)] : null; }
 
 // ============= MAIN APP =============
 function App() {
   const [userId, setUserId] = useState(null);
-  const [screen, setScreen] = useState('menu');
-  const [gameCode, setGameCode] = useState('');
+  const [screen, setScreen] = useState('home');
+  const [gameCode, setGameCode] = useState(null);
   const [gameState, setGameState] = useState(null);
   const [playerIndex, setPlayerIndex] = useState(-1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [gamesList, setGamesList] = useState([]);
 
-  useEffect(() => {
-    auth.signInAnonymously().then(cred => {
-      setUserId(cred.user.uid);
-      setLoading(false);
-    }).catch(err => {
-      setError("Erreur de connexion: " + err.message);
-      setLoading(false);
-    });
-  }, []);
+  useEffect(() => { auth.signInAnonymously().then(cred => setUserId(cred.user.uid)); }, []);
 
   useEffect(() => {
     if (!gameCode) return;
@@ -238,1093 +128,1126 @@ function App() {
     const unsub = ref.on('value', snap => {
       const data = snap.val();
       if (data) {
-        // Convert Firebase object to proper array for players
-        if (data.players && !Array.isArray(data.players)) {
-          data.players = Array(data.playerCount).fill(null).map((_, i) => data.players[i] || null);
-        }
-        if (data.selectedCharacters && !Array.isArray(data.selectedCharacters)) {
-          data.selectedCharacters = Object.values(data.selectedCharacters);
-        }
-        if (data.drawnAnomalies && !Array.isArray(data.drawnAnomalies)) {
-          data.drawnAnomalies = Object.values(data.drawnAnomalies);
-        }
-        if (data.drawnQuetes && !Array.isArray(data.drawnQuetes)) {
-          data.drawnQuetes = Object.values(data.drawnQuetes);
-        }
+        data.players = ensureArray(data.players, data.playerCount);
+        data.selectedCharacters = ensureArray(data.selectedCharacters);
+        data.drawnAnomalies = ensureArray(data.drawnAnomalies);
+        data.drawnQuetes = ensureArray(data.drawnQuetes);
+        data.completedObjectives = ensureArray(data.completedObjectives);
+        data.activeEvents = ensureArray(data.activeEvents);
         setGameState(data);
-        if (data.players && userId) {
-          const idx = data.players.findIndex(p => p && p.odId === userId);
-          if (idx >= 0) setPlayerIndex(idx);
-        }
+        if (data.players && userId) { const idx = data.players.findIndex(p => p && p.odId === userId); if (idx >= 0) setPlayerIndex(idx); }
       }
     });
     return () => ref.off('value', unsub);
   }, [gameCode, userId]);
 
+  useEffect(() => { if (userId) loadGamesList(); }, [userId]);
+
+  const loadGamesList = async () => {
+    const snap = await db.ref('games').orderByChild('createdAt').limitToLast(50).once('value');
+    const games = [];
+    snap.forEach(child => { const g = child.val(); if (g && g.players) { const players = ensureArray(g.players); if (players.some(p => p && p.odId === userId)) games.push({ code: child.key, ...g }); } });
+    setGamesList(games.reverse());
+  };
+
   const createGame = async (playerCount) => {
     const code = genCode();
-    const newGame = {
-      code, playerCount, step: 'lobby', currentTurn: 0,
-      players: Array(playerCount).fill(null),
-      selectedCharacters: [], drawnAnomalies: [], drawnQuetes: [], events: [],
-      createdAt: Date.now(), lastPdvMilestone: 0
-    };
-    await db.ref(`games/${code}`).set(newGame);
-    setGameCode(code);
-    setScreen('lobby');
+    await db.ref(`games/${code}`).set({ code, playerCount, step: 'lobby', currentTurn: 0, players: Array(playerCount).fill(null), selectedCharacters: [], drawnAnomalies: [], drawnQuetes: [], completedObjectives: [], activeEvents: [], eventBonus: 0, lastEventThreshold: 0, createdAt: Date.now() });
+    setGameCode(code); setPlayerIndex(-1); setScreen('lobby');
   };
 
   const joinGame = async (code) => {
     const snap = await db.ref(`games/${code}`).once('value');
-    if (!snap.exists()) { setError("Partie introuvable"); return; }
-    setGameCode(code);
-    setScreen('lobby');
+    if (!snap.exists()) { alert("Partie non trouvée !"); return; }
+    setGameCode(code); setScreen('lobby');
   };
 
-  const joinAsPlayer = async (slot, playerName, characterKey) => {
-    if (!gameState || playerIndex >= 0) return;
-    const char = CHARACTERS[characterKey];
-    const newPlayer = {
-      id: `player_${slot}`, odId: userId, playerName, characterKey, character: char,
-      pvCurrent: char.pvMax, or: char.goldBonus || 0, cuivre: 0, argent: 0, obsidienne: 0,
-      pdv: 0, tourPlateau: 0, baseStats: null, effects: [], quests: [], territories: [],
-      skills: char.skills.map((s, i) => ({ id: `skill_${i}`, description: s, status: 'AVAILABLE' })),
-      usedAttackDice: false, blessAvailable: true, curseAvailable: true, rerollAvailable: true,
-      pdvHistory: [], ready: false
-    };
-    const updates = {};
-    updates[`players/${slot}`] = newPlayer;
-    updates[`selectedCharacters`] = [...(gameState.selectedCharacters || []), characterKey];
-    await db.ref(`games/${gameCode}`).update(updates);
+  const joinAsPlayer = async (slot, name, charKey) => {
+    const character = CHARACTERS[charKey];
+    const newPlayer = { id: `player_${slot}`, odId: userId, playerName: name, characterKey: charKey, character, pvCurrent: character.pvMax, or: rulesEngine.getStartGold(charKey), cuivre: 0, argent: 0, obsidienne: 0, pdv: 0, pdvHistory: [], tourPlateau: 0, baseStats: null, effects: [], quests: [], territories: [], defeatedBosses: [], skills: character.skills.map((s, i) => ({ id: `skill_${i}`, description: s })), usedAttackDice: false, rerollAvailable: true, blessAvailable: charKey === 'VICAIRE', curseAvailable: charKey === 'HERETIQUE', ready: false };
+    await db.ref(`games/${gameCode}`).update({ [`players/${slot}`]: newPlayer, selectedCharacters: [...(gameState.selectedCharacters || []), charKey] });
     setPlayerIndex(slot);
   };
 
-  const allocateStats = async (stats) => {
-    if (playerIndex < 0) return;
-    await db.ref(`games/${gameCode}/players/${playerIndex}`).update({ baseStats: stats, ready: true });
-  };
+  const allocateStats = async (stats) => { await db.ref(`games/${gameCode}/players/${playerIndex}`).update({ baseStats: stats, ready: true }); };
 
   const startGame = async () => {
-    const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
-    const allReady = players.every(p => p && p.ready && p.baseStats);
-    if (!allReady) { alert("Tous les joueurs doivent être prêts !"); return; }
+    const players = ensureArray(gameState.players, gameState.playerCount);
+    if (!players.every(p => p && p.ready && p.baseStats)) { alert("Tous les joueurs doivent être prêts !"); return; }
     await db.ref(`games/${gameCode}`).update({ step: 'play' });
   };
 
-  const updatePlayer = async (idx, updates) => {
-    await db.ref(`games/${gameCode}/players/${idx}`).update(updates);
-  };
+  const updateGame = async (updates) => { await db.ref(`games/${gameCode}`).update(updates); };
+  const updatePlayer = async (idx, updates) => { await db.ref(`games/${gameCode}/players/${idx}`).update(updates); };
 
-  const updateGame = async (updates) => {
-    await db.ref(`games/${gameCode}`).update(updates);
+  const addPdvWithHistory = async (idx, amount, source, details = {}) => {
+    const player = gameState.players[idx]; if (!player) return;
+    const newHistory = [...(player.pdvHistory || []), { id: `pdv_${Date.now()}`, amount, source, details, timestamp: Date.now() }];
+    await updatePlayer(idx, { pdv: player.pdv + amount, pdvHistory: newHistory });
+    const totalPdv = gameState.players.reduce((s, p) => s + (p?.pdv || 0), 0) + amount;
+    const newThreshold = Math.floor(totalPdv / 10);
+    if (newThreshold > (gameState.lastEventThreshold || 0)) {
+      const eventText = MAJOR_EVENTS[Math.floor(Math.random() * MAJOR_EVENTS.length)];
+      await updateGame({ lastEventThreshold: newThreshold, pendingEvent: { text: eventText, threshold: newThreshold * 10 } });
+    }
   };
 
   const nextTurn = async () => {
-    const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
-    const newPlayers = [...players];
-    if (newPlayers[gameState.currentTurn]) {
-      newPlayers[gameState.currentTurn] = { ...newPlayers[gameState.currentTurn], usedAttackDice: false };
-    }
-    const nextIdx = (gameState.currentTurn + 1) % gameState.playerCount;
-    await db.ref(`games/${gameCode}`).update({ players: newPlayers, currentTurn: nextIdx });
+    const players = ensureArray(gameState.players, gameState.playerCount);
+    const currentIdx = gameState.currentTurn;
+    if (players[currentIdx]) await updatePlayer(currentIdx, { usedAttackDice: false, rerollAvailable: true });
+    await updateGame({ currentTurn: (currentIdx + 1) % gameState.playerCount, eventBonus: 0 });
   };
 
-  if (loading) return React.createElement("div", { className: "min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 to-blue-900" },
-    React.createElement("div", { className: "text-white text-2xl animate-pulse" }, "Connexion...")
-  );
+  const clearPendingEvent = async () => { await updateGame({ pendingEvent: null }); };
 
-  if (error) return React.createElement("div", { className: "min-h-screen flex items-center justify-center bg-red-900 p-6" },
-    React.createElement("div", { className: "bg-white rounded-xl p-6 text-center" },
-      React.createElement("p", { className: "text-red-600 font-bold mb-4" }, error),
-      React.createElement("button", { onClick: () => { setError(null); setScreen('menu'); }, className: "px-6 py-2 bg-blue-600 text-white rounded-lg" }, "Retour")
-    )
-  );
+  const deleteGame = async () => { if (confirm("Supprimer cette partie ?")) { await db.ref(`games/${gameCode}`).remove(); setGameCode(null); setGameState(null); setPlayerIndex(-1); setScreen('home'); loadGamesList(); } };
 
-  if (screen === 'menu') return React.createElement(MenuScreen, { onCreateGame: () => setScreen('create'), onJoinGame: () => setScreen('join') });
-  if (screen === 'create') return React.createElement(CreateGameScreen, { onCreate: createGame, onBack: () => setScreen('menu') });
-  if (screen === 'join') return React.createElement(JoinGameScreen, { onJoin: joinGame, onBack: () => setScreen('menu') });
-
-  if (screen === 'lobby' && gameState) {
-    if (gameState.step === 'lobby') {
-      return React.createElement(LobbyScreen, {
-        gameState, gameCode, userId, playerIndex,
-        onJoinAsPlayer: joinAsPlayer, onAllocateStats: allocateStats, onStartGame: startGame
-      });
-    }
-    if (gameState.step === 'play') {
-      const currentPlayer = gameState.players[playerIndex];
-      const isMyTurn = gameState.currentTurn === playerIndex;
-      return React.createElement(TurnGameScreen, {
-        gameState, gameCode, currentPlayer, playerIndex, isMyTurn,
-        updatePlayer, updateGame, nextTurn
-      });
-    }
+  if (!userId) return React.createElement("div", { className: "min-h-screen bg-purple-900 flex items-center justify-center" }, React.createElement("div", { className: "text-white text-xl animate-pulse" }, "Connexion..."));
+  if (screen === 'home') return React.createElement(HomeScreen, { onNewGame: () => setScreen('setup'), onJoinGame: () => setScreen('join'), gamesList, onLoadGame: joinGame, onRefresh: loadGamesList });
+  if (screen === 'setup') return React.createElement(SetupScreen, { onComplete: createGame, onBack: () => setScreen('home') });
+  if (screen === 'join') return React.createElement(JoinScreen, { onJoin: joinGame, onBack: () => setScreen('home') });
+  if (!gameState) return React.createElement("div", { className: "min-h-screen bg-purple-900 flex items-center justify-center" }, React.createElement("div", { className: "text-white text-xl animate-pulse" }, "Chargement..."));
+  if (gameState.step === 'lobby') return React.createElement(LobbyScreen, { gameState, gameCode, userId, playerIndex, onJoinAsPlayer: joinAsPlayer, onAllocateStats: allocateStats, onStartGame: startGame, onBack: () => { setGameCode(null); setGameState(null); setScreen('home'); } });
+  if (gameState.step === 'play') {
+    const players = ensureArray(gameState.players, gameState.playerCount);
+    return React.createElement(TurnGameScreen, { gameState, gameCode, currentPlayer: players[playerIndex], playerIndex, isMyTurn: gameState.currentTurn === playerIndex, userId, updatePlayer, updateGame, addPdvWithHistory, nextTurn, clearPendingEvent, onDelete: deleteGame, onBack: () => { setGameCode(null); setGameState(null); setScreen('home'); loadGamesList(); } });
   }
-
-  return React.createElement("div", { className: "min-h-screen flex items-center justify-center" },
-    React.createElement("p", null, "Chargement...")
-  );
+  return null;
 }
 
-// ============= MENU SCREEN =============
-function MenuScreen({ onCreateGame, onJoinGame }) {
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center" },
-      React.createElement("h1", { className: "text-4xl font-bold text-gray-800 mb-2" }, "Quêtes d'Anomalies"),
-      React.createElement("p", { className: "text-gray-600 mb-2" }, "v2.3 - Multijoueur Firebase"),
-      React.createElement("p", { className: "text-sm text-purple-600 mb-8" }, "🌐 Jouez en ligne avec vos amis !"),
-      React.createElement("button", { onClick: onCreateGame, className: "w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg mb-4 hover:from-purple-700 hover:to-blue-700" }, "🆕 Créer une partie"),
-      React.createElement("button", { onClick: onJoinGame, className: "w-full py-4 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl font-bold text-lg hover:from-green-700 hover:to-teal-700" }, "🔗 Rejoindre une partie")
-    )
-  );
-}
-
-// ============= CREATE GAME SCREEN =============
-function CreateGameScreen({ onCreate, onBack }) {
-  const [count, setCount] = useState(2);
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full" },
-      React.createElement("h2", { className: "text-3xl font-bold text-center text-gray-800 mb-6" }, "Nouvelle Partie"),
-      React.createElement("label", { className: "block text-lg font-semibold text-gray-700 mb-4 text-center" }, "Nombre de joueurs"),
-      React.createElement("div", { className: "flex items-center justify-center gap-4 mb-6" },
-        React.createElement("button", { onClick: () => setCount(Math.max(1, count - 1)), className: "w-12 h-12 bg-purple-600 text-white rounded-full font-bold text-xl" }, "-"),
-        React.createElement("div", { className: "text-5xl font-bold text-purple-600 w-16 text-center" }, count),
-        React.createElement("button", { onClick: () => setCount(Math.min(11, count + 1)), className: "w-12 h-12 bg-purple-600 text-white rounded-full font-bold text-xl" }, "+")
+// ============= SCREENS =============
+function HomeScreen({ onNewGame, onJoinGame, gamesList, onLoadGame, onRefresh }) {
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900 p-4" },
+    React.createElement("div", { className: "max-w-md mx-auto" },
+      React.createElement("div", { className: "text-center mb-8 pt-8" },
+        React.createElement("h1", { className: "text-4xl font-bold text-white mb-2" }, "🎴 Quêtes d'Anomalies"),
+        React.createElement("p", { className: "text-purple-300" }, "Firebase Multijoueur v3.0")
       ),
-      React.createElement("div", { className: "flex gap-2 flex-wrap justify-center mb-6" },
-        [1,2,3,4,5,6,7,8,9,10,11].map(n => React.createElement("button", {
-          key: n, onClick: () => setCount(n),
-          className: `w-10 h-10 rounded-lg font-semibold ${count === n ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'}`
-        }, n))
+      React.createElement("div", { className: "space-y-4" },
+        React.createElement("button", { onClick: onNewGame, className: "w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg" }, "🎮 Nouvelle Partie"),
+        React.createElement("button", { onClick: onJoinGame, className: "w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold text-lg shadow-lg" }, "🔗 Rejoindre")
       ),
-      React.createElement("button", { onClick: () => onCreate(count), className: "w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-lg mb-3" }, "Créer la partie"),
-      React.createElement("button", { onClick: onBack, className: "w-full py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold" }, "Retour")
-    )
-  );
-}
-
-// ============= JOIN GAME SCREEN =============
-function JoinGameScreen({ onJoin, onBack }) {
-  const [code, setCode] = useState('');
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-900 to-blue-900 flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full" },
-      React.createElement("h2", { className: "text-3xl font-bold text-center text-gray-800 mb-6" }, "Rejoindre une partie"),
-      React.createElement("label", { className: "block text-sm font-semibold text-gray-700 mb-2" }, "Code de la partie"),
-      React.createElement("input", {
-        type: "text", value: code, onChange: e => setCode(e.target.value.toUpperCase()),
-        placeholder: "Ex: ABC123", maxLength: 6,
-        className: "w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-center text-2xl font-bold tracking-widest mb-6"
-      }),
-      React.createElement("button", {
-        onClick: () => code.length === 6 && onJoin(code), disabled: code.length !== 6,
-        className: `w-full py-4 rounded-xl font-bold text-lg mb-3 ${code.length === 6 ? 'bg-gradient-to-r from-green-600 to-teal-600 text-white' : 'bg-gray-300 text-gray-500'}`
-      }, "Rejoindre"),
-      React.createElement("button", { onClick: onBack, className: "w-full py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold" }, "Retour")
-    )
-  );
-}
-
-// ============= LOBBY SCREEN =============
-function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer, onAllocateStats, onStartGame }) {
-  const [selectedSlot, setSelectedSlot] = useState(null);
-  const [playerName, setPlayerName] = useState('');
-  const [selectedChar, setSelectedChar] = useState(null);
-  const [showStatAlloc, setShowStatAlloc] = useState(false);
-
-  // Ensure players is always an array
-  const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
-  const selectedCharacters = Array.isArray(gameState.selectedCharacters) ? gameState.selectedCharacters : Object.values(gameState.selectedCharacters || {});
-
-  const currentPlayer = playerIndex >= 0 ? players[playerIndex] : null;
-  const needsStats = currentPlayer && !currentPlayer.baseStats;
-
-  if (needsStats && !showStatAlloc) setShowStatAlloc(true);
-
-  if (showStatAlloc && currentPlayer) {
-    return React.createElement(StatAllocationScreen, {
-      player: currentPlayer,
-      onComplete: (stats) => { onAllocateStats(stats); setShowStatAlloc(false); }
-    });
-  }
-
-  const handleJoin = () => {
-    if (selectedSlot !== null && playerName.trim() && selectedChar) {
-      onJoinAsPlayer(selectedSlot, playerName.trim(), selectedChar);
-      setSelectedSlot(null); setPlayerName(''); setSelectedChar(null);
-    }
-  };
-
-  const allReady = players.every(p => p && p.ready && p.baseStats);
-  const isHost = players[0]?.odId === userId;
-
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 p-6" },
-    React.createElement("div", { className: "max-w-4xl mx-auto" },
-      React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-6 text-center" },
-        React.createElement("h2", { className: "text-3xl font-bold text-gray-800 mb-2" }, "Salon d'attente"),
-        React.createElement("div", { className: "bg-purple-100 rounded-lg p-4 mb-4" },
-          React.createElement("p", { className: "text-sm text-gray-600 mb-1" }, "Code de la partie :"),
-          React.createElement("p", { className: "text-4xl font-bold text-purple-600 tracking-widest" }, gameCode)
+      gamesList.length > 0 && React.createElement("div", { className: "mt-8" },
+        React.createElement("div", { className: "flex justify-between items-center mb-3" },
+          React.createElement("h2", { className: "text-xl font-bold text-white" }, "📋 Mes Parties"),
+          React.createElement("button", { onClick: onRefresh, className: "text-purple-300 text-sm" }, "🔄 Actualiser")
         ),
-        React.createElement("p", { className: "text-gray-600" }, `${players.filter(p => p).length} / ${gameState.playerCount} joueurs`)
-      ),
-
-      React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" },
-        players.map((player, idx) => React.createElement("div", {
-          key: idx,
-          onClick: () => !player && playerIndex < 0 && setSelectedSlot(idx),
-          className: `rounded-xl p-4 border-2 transition-all ${player ? (player.ready ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400') : (selectedSlot === idx ? 'bg-purple-100 border-purple-500' : 'bg-gray-50 border-gray-300 hover:border-purple-400 cursor-pointer')}`
-        },
-          player ? React.createElement("div", null,
-            React.createElement("div", { className: "flex items-center justify-between mb-2" },
-              React.createElement("span", { className: "font-bold text-gray-800" }, player.playerName),
-              React.createElement("span", { className: `px-2 py-1 rounded text-xs font-bold ${player.ready ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'}` }, player.ready ? "✓ Prêt" : "En attente")
+        React.createElement("div", { className: "space-y-2" },
+          gamesList.slice(0, 5).map(g => React.createElement("button", { key: g.code, onClick: () => onLoadGame(g.code), className: "w-full p-3 bg-white bg-opacity-10 rounded-lg text-left" },
+            React.createElement("div", { className: "flex justify-between items-center" },
+              React.createElement("span", { className: "text-white font-mono" }, g.code),
+              React.createElement("span", { className: `text-sm ${g.step === 'play' ? 'text-green-400' : 'text-yellow-400'}` }, g.step === 'play' ? '▶️ En cours' : '⏳ Lobby')
             ),
-            React.createElement("p", { className: "text-sm text-purple-600" }, player.character?.name || 'Personnage')
-          ) : React.createElement("div", { className: "text-center py-4" },
-            React.createElement("p", { className: "text-gray-400" }, `Place ${idx + 1}`),
-            React.createElement("p", { className: "text-sm text-gray-500" }, "Cliquez pour rejoindre")
+            React.createElement("div", { className: "text-purple-300 text-sm mt-1" }, `${ensureArray(g.players).filter(p => p).length}/${g.playerCount} joueurs`)
+          ))
+        )
+      )
+    )
+  );
+}
+
+function SetupScreen({ onComplete, onBack }) {
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900 p-4" },
+    React.createElement("div", { className: "max-w-md mx-auto pt-8" },
+      React.createElement("button", { onClick: onBack, className: "text-white mb-4" }, "← Retour"),
+      React.createElement("h2", { className: "text-2xl font-bold text-white text-center mb-6" }, "Nombre de joueurs"),
+      React.createElement("div", { className: "grid grid-cols-2 gap-4" },
+        [2, 3, 4, 5, 6].map(n => React.createElement("button", { key: n, onClick: () => onComplete(n), className: "py-6 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-2xl" }, `${n} 👥`))
+      )
+    )
+  );
+}
+
+function JoinScreen({ onJoin, onBack }) {
+  const [code, setCode] = useState('');
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900 p-4" },
+    React.createElement("div", { className: "max-w-md mx-auto pt-8" },
+      React.createElement("button", { onClick: onBack, className: "text-white mb-4" }, "← Retour"),
+      React.createElement("h2", { className: "text-2xl font-bold text-white text-center mb-6" }, "Code de la partie"),
+      React.createElement("input", { value: code, onChange: e => setCode(e.target.value.toUpperCase()), placeholder: "CODE", maxLength: 6, className: "w-full p-4 text-center text-2xl font-mono rounded-xl mb-4" }),
+      React.createElement("button", { onClick: () => code.length === 6 && onJoin(code), disabled: code.length !== 6, className: `w-full py-4 rounded-xl font-bold text-lg ${code.length === 6 ? 'bg-green-600 text-white' : 'bg-gray-400 text-gray-600'}` }, "Rejoindre")
+    )
+  );
+}
+
+function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer, onAllocateStats, onStartGame, onBack }) {
+  const [name, setName] = useState('');
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [statScreen, setStatScreen] = useState(false);
+  const players = ensureArray(gameState.players, gameState.playerCount);
+  const takenChars = ensureArray(gameState.selectedCharacters);
+  const myPlayer = playerIndex >= 0 ? players[playerIndex] : null;
+  const allReady = players.every(p => p && p.ready && p.baseStats);
+  const isHost = players.findIndex(p => p) === playerIndex;
+
+  if (myPlayer && !myPlayer.baseStats && statScreen) {
+    return React.createElement(StatAllocationScreen, { player: myPlayer, onComplete: onAllocateStats, onBack: () => setStatScreen(false) });
+  }
+
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900 p-4" },
+    React.createElement("div", { className: "max-w-md mx-auto pt-4" },
+      React.createElement("button", { onClick: onBack, className: "text-white mb-4" }, "← Quitter"),
+      React.createElement("div", { className: "bg-white bg-opacity-10 rounded-xl p-4 mb-4 text-center" },
+        React.createElement("p", { className: "text-purple-300 text-sm" }, "Code de la partie"),
+        React.createElement("p", { className: "text-3xl font-mono font-bold text-white" }, gameCode)
+      ),
+      React.createElement("div", { className: "space-y-2 mb-6" },
+        players.map((p, i) => React.createElement("div", { key: i, className: `p-3 rounded-lg ${p ? (p.ready ? 'bg-green-600' : 'bg-blue-600') : 'bg-gray-600'} text-white` },
+          p ? React.createElement("div", { className: "flex justify-between items-center" },
+            React.createElement("span", null, `${p.playerName} - ${p.character?.name}`),
+            React.createElement("span", null, p.ready ? '✅' : '⏳')
+          ) : React.createElement("span", { className: "text-gray-300" }, `Slot ${i + 1} - Libre`)
+        ))
+      ),
+      playerIndex < 0 && React.createElement("div", { className: "bg-white rounded-xl p-4 space-y-4" },
+        React.createElement("input", { value: name, onChange: e => setName(e.target.value), placeholder: "Votre nom", className: "w-full p-3 border rounded-lg" }),
+        React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+          Object.entries(CHARACTERS).map(([k, c]) => React.createElement("button", { key: k, onClick: () => setSelectedChar(k), disabled: takenChars.includes(k), className: `p-2 rounded-lg text-sm font-semibold ${selectedChar === k ? 'bg-purple-600 text-white' : takenChars.includes(k) ? 'bg-gray-300 text-gray-500' : 'bg-gray-100'}` }, c.name))
+        ),
+        React.createElement("button", { onClick: () => { const slot = players.findIndex(p => !p); if (slot >= 0 && name && selectedChar) onJoinAsPlayer(slot, name, selectedChar); }, disabled: !name || !selectedChar, className: `w-full py-3 rounded-lg font-bold ${name && selectedChar ? 'bg-green-600 text-white' : 'bg-gray-300'}` }, "Rejoindre")
+      ),
+      myPlayer && !myPlayer.baseStats && React.createElement("button", { onClick: () => setStatScreen(true), className: "w-full py-4 bg-yellow-500 text-white rounded-xl font-bold" }, "⚙️ Répartir les stats"),
+      myPlayer && myPlayer.baseStats && !myPlayer.ready && React.createElement("p", { className: "text-center text-green-400" }, "✅ Prêt !"),
+      isHost && allReady && React.createElement("button", { onClick: onStartGame, className: "w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold mt-4" }, "🚀 Lancer la partie")
+    )
+  );
+}
+
+function StatAllocationScreen({ player, onComplete, onBack }) {
+  const [stats, setStats] = useState({ endurance: 0, force: 0, vitesse: 0, perception: 0, sagesse: 0, intelligence: 0 });
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  const maxPoints = 15;
+
+  const adjust = (stat, delta) => {
+    const newVal = stats[stat] + delta;
+    if (newVal >= 0 && newVal <= 6 && total + delta <= maxPoints) setStats({ ...stats, [stat]: newVal });
+  };
+
+  return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900 p-4" },
+    React.createElement("div", { className: "max-w-md mx-auto pt-4" },
+      React.createElement("button", { onClick: onBack, className: "text-white mb-4" }, "← Retour"),
+      React.createElement("h2", { className: "text-xl font-bold text-white text-center mb-2" }, "Répartir vos statistiques"),
+      React.createElement("div", { className: "text-center mb-4" },
+        React.createElement("span", { className: `text-2xl font-bold ${total === maxPoints ? 'text-green-400' : 'text-yellow-400'}` }, `${total}/${maxPoints}`)
+      ),
+      React.createElement("div", { className: "space-y-3" },
+        Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("div", { key: k, className: "bg-white bg-opacity-10 rounded-lg p-3 flex items-center justify-between" },
+          React.createElement("span", { className: "text-white font-semibold" }, n),
+          React.createElement("div", { className: "flex items-center gap-3" },
+            React.createElement("button", { onClick: () => adjust(k, -1), className: "w-10 h-10 bg-red-600 text-white rounded-full font-bold" }, "-"),
+            React.createElement("span", { className: "text-white text-xl font-bold w-8 text-center" }, stats[k]),
+            React.createElement("button", { onClick: () => adjust(k, 1), className: "w-10 h-10 bg-green-600 text-white rounded-full font-bold" }, "+")
           )
         ))
       ),
-
-      selectedSlot !== null && playerIndex < 0 && React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-6" },
-        React.createElement("h3", { className: "text-xl font-bold text-gray-800 mb-4" }, `Rejoindre - Place ${selectedSlot + 1}`),
-        React.createElement("input", {
-          type: "text", value: playerName, onChange: e => setPlayerName(e.target.value),
-          placeholder: "Votre nom...", className: "w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4"
-        }),
-        React.createElement("p", { className: "font-semibold text-gray-700 mb-3" }, "Choisissez votre personnage :"),
-        React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-3 gap-3 mb-4" },
-          Object.entries(CHARACTERS).map(([key, char]) => {
-            const taken = selectedCharacters.includes(key);
-            return React.createElement("button", {
-              key, onClick: () => !taken && setSelectedChar(key), disabled: taken,
-              className: `p-3 rounded-lg border-2 text-left transition-all ${taken ? 'bg-gray-100 border-gray-200 opacity-50' : selectedChar === key ? 'bg-purple-100 border-purple-500' : 'bg-white border-gray-300 hover:border-purple-400'}`
-            },
-              React.createElement("p", { className: "font-bold text-sm" }, char.name),
-              React.createElement("p", { className: "text-xs text-gray-500" }, `❤️ ${char.pvMax} PV`),
-              taken && React.createElement("span", { className: "text-xs text-red-500" }, "Pris")
-            );
-          })
-        ),
-        React.createElement("button", {
-          onClick: handleJoin, disabled: !playerName.trim() || !selectedChar,
-          className: `w-full py-3 rounded-xl font-bold ${playerName.trim() && selectedChar ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500'}`
-        }, "Rejoindre la partie")
-      ),
-
-      currentPlayer && React.createElement("div", { className: "bg-green-50 rounded-xl p-4 mb-6 text-center" },
-        React.createElement("p", { className: "text-green-700 font-semibold" }, `✓ Vous jouez ${currentPlayer.playerName} (${currentPlayer.character?.name || 'Personnage'})`),
-        currentPlayer.ready && React.createElement("p", { className: "text-green-600 text-sm mt-1" }, "En attente des autres joueurs...")
-      ),
-
-      isHost && allReady && React.createElement("button", {
-        onClick: onStartGame,
-        className: "w-full py-4 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-xl font-bold text-lg"
-      }, "🎮 Lancer la partie !")
-    )
-  );
-}
-
-// ============= STAT ALLOCATION SCREEN =============
-function StatAllocationScreen({ player, onComplete }) {
-  const MODIFIERS = [-2, -1, 0, 0, 1, 2];
-  const [allocation, setAllocation] = useState({ endurance: null, force: null, vitesse: null, perception: null, sagesse: null, intelligence: null });
-
-  const isModifierUsed = (mod) => {
-    const used = Object.values(allocation).filter(v => v === mod).length;
-    const total = MODIFIERS.filter(m => m === mod).length;
-    return used >= total;
-  };
-
-  const handleClick = (stat, mod) => {
-    if (allocation[stat] === mod) setAllocation({ ...allocation, [stat]: null });
-    else if (!isModifierUsed(mod) || allocation[stat] !== null) setAllocation({ ...allocation, [stat]: mod });
-  };
-
-  const isValid = Object.values(allocation).every(v => v !== null);
-
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 p-6" },
-    React.createElement("div", { className: "max-w-2xl mx-auto" },
-      React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-6 text-center" },
-        React.createElement("h2", { className: "text-2xl font-bold text-gray-800" }, player.playerName),
-        React.createElement("p", { className: "text-purple-600" }, player.character.name)
-      ),
-      React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-6" },
-        React.createElement("h3", { className: "text-xl font-bold text-gray-800 mb-4" }, "Répartition des modificateurs"),
-        React.createElement("p", { className: "text-gray-600 mb-6" }, "Assignez -2, -1, 0, 0, +1, +2 aux statistiques"),
-        React.createElement("div", { className: "space-y-4" },
-          Object.entries(STAT_NAMES).map(([key, name]) => React.createElement("div", { key, className: "bg-gray-50 rounded-lg p-4" },
-            React.createElement("div", { className: "font-semibold text-gray-700 mb-3" }, name),
-            React.createElement("div", { className: "flex gap-2 justify-center flex-wrap" },
-              MODIFIERS.map((mod, idx) => {
-                const isSel = allocation[key] === mod;
-                const isDis = !isSel && isModifierUsed(mod);
-                return React.createElement("button", {
-                  key: idx, onClick: () => handleClick(key, mod), disabled: isDis,
-                  className: `w-12 h-12 rounded-full font-bold transition-all ${isSel ? (mod >= 0 ? 'bg-green-600 text-white ring-4 ring-green-300' : 'bg-red-600 text-white ring-4 ring-red-300') : isDis ? 'bg-gray-200 text-gray-400' : 'bg-white border-2 border-gray-300 hover:border-purple-500'}`
-                }, mod > 0 ? `+${mod}` : mod);
-              })
-            )
-          ))
-        ),
-        React.createElement("div", { className: "mt-6 p-4 bg-blue-50 rounded-lg text-center" },
-          isValid ? React.createElement("span", { className: "text-green-600 font-bold" }, "✓ Prêt !") : React.createElement("span", { className: "text-gray-600" }, "Assignez tous les modificateurs")
-        )
-      ),
-      React.createElement("button", {
-        onClick: () => isValid && onComplete(allocation), disabled: !isValid,
-        className: `w-full py-4 rounded-xl font-bold text-lg ${isValid ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white' : 'bg-gray-300 text-gray-500'}`
-      }, "Valider")
+      React.createElement("button", { onClick: () => total === maxPoints && onComplete(stats), disabled: total !== maxPoints, className: `w-full py-4 rounded-xl font-bold mt-6 ${total === maxPoints ? 'bg-green-600 text-white' : 'bg-gray-400'}` }, "Confirmer")
     )
   );
 }
 
 // ============= TURN GAME SCREEN =============
-function TurnGameScreen({ gameState, gameCode, currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, nextTurn }) {
-  const [activeTab, setActiveTab] = useState('anomalie');
-  const [showDeath, setShowDeath] = useState(false);
-  const [showPassStart, setShowPassStart] = useState(false);
-  const [showEndGame, setShowEndGame] = useState(false);
+function TurnGameScreen({ gameState, gameCode, currentPlayer, playerIndex, isMyTurn, userId, updatePlayer, updateGame, addPdvWithHistory, nextTurn, clearPendingEvent, onDelete, onBack }) {
+  const [activeTab, setActiveTab] = useState('tirages');
+  const players = ensureArray(gameState.players, gameState.playerCount);
+  const currentTurnPlayer = players[gameState.currentTurn];
 
-  // Ensure players is always an array
-  const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
-  const activePlayer = players[gameState.currentTurn];
+  // Death overlay
+  if (currentPlayer && currentPlayer.pvCurrent <= 0) {
+    const respawn = async () => {
+      await updatePlayer(playerIndex, { pvCurrent: Math.ceil(currentPlayer.character.pvMax / 2), or: Math.max(0, currentPlayer.or - 5), tourPlateau: currentPlayer.tourPlateau + 1 });
+    };
+    return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center p-4" },
+      React.createElement("div", { className: "bg-red-900 bg-opacity-50 rounded-2xl p-8 text-center max-w-sm" },
+        React.createElement("div", { className: "text-6xl mb-4" }, "💀"),
+        React.createElement("h2", { className: "text-3xl font-bold text-white mb-4" }, "Vous êtes mort !"),
+        React.createElement("p", { className: "text-gray-300 mb-6" }, "Résurrection: 50% PV, -5 Or"),
+        React.createElement("button", { onClick: respawn, className: "w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold" }, "🔄 Ressusciter")
+      )
+    );
+  }
+
+  // Start of turn overlay
+  const [showStartOverlay, setShowStartOverlay] = useState(false);
+  useEffect(() => { if (isMyTurn && currentPlayer && !currentPlayer.usedAttackDice) setShowStartOverlay(true); }, [gameState.currentTurn]);
+
+  const handlePassDepart = async () => {
+    const bonus = rulesEngine.getPassBonus(currentPlayer);
+    const updates = { tourPlateau: currentPlayer.tourPlateau + 1, or: currentPlayer.or + 2 + (bonus.or || 0) };
+    await updatePlayer(playerIndex, updates);
+    setShowStartOverlay(false);
+  };
+
+  if (showStartOverlay && isMyTurn) {
+    return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900 flex items-center justify-center p-4" },
+      React.createElement("div", { className: "bg-white rounded-2xl p-6 max-w-sm w-full text-center" },
+        React.createElement("div", { className: "text-5xl mb-4" }, "🎯"),
+        React.createElement("h2", { className: "text-2xl font-bold text-gray-800 mb-2" }, "C'est votre tour !"),
+        React.createElement("p", { className: "text-gray-600 mb-4" }, `Tour de plateau: ${currentPlayer.tourPlateau}`),
+        React.createElement("div", { className: "space-y-3" },
+          React.createElement("button", { onClick: handlePassDepart, className: "w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl font-bold" }, `🏁 Passer Départ (+2 Or${currentPlayer.characterKey === 'MARCHAND' ? ' +4 Marchand' : ''})`),
+          React.createElement("button", { onClick: () => setShowStartOverlay(false), className: "w-full py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold" }, "Continuer")
+        )
+      )
+    );
+  }
+
+  // Event overlay
+  if (gameState.pendingEvent) {
+    return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-yellow-600 to-orange-700 flex items-center justify-center p-4" },
+      React.createElement("div", { className: "bg-white rounded-2xl p-6 max-w-sm w-full text-center" },
+        React.createElement("div", { className: "text-5xl mb-4" }, "🎭"),
+        React.createElement("h2", { className: "text-xl font-bold text-gray-800 mb-4" }, `Seuil ${gameState.pendingEvent.threshold} PDV atteint !`),
+        React.createElement("p", { className: "text-gray-700 mb-6" }, gameState.pendingEvent.text),
+        React.createElement("button", { onClick: clearPendingEvent, className: "w-full py-3 bg-purple-600 text-white rounded-xl font-bold" }, "Continuer")
+      )
+    );
+  }
+
+  // End game check
   const totalPdv = players.reduce((s, p) => s + (p?.pdv || 0), 0);
   const targetPdv = gameState.playerCount * 10;
+  if (totalPdv >= targetPdv) {
+    const ranking = [...players].filter(p => p).sort((a, b) => (b?.pdv || 0) - (a?.pdv || 0));
+    const winner = ranking[0];
+    return React.createElement("div", { className: "min-h-screen bg-gradient-to-b from-yellow-500 to-orange-600 flex items-center justify-center p-4" },
+      React.createElement("div", { className: "bg-white rounded-2xl p-6 max-w-sm w-full text-center" },
+        React.createElement("div", { className: "text-6xl mb-4" }, "🏆"),
+        React.createElement("h2", { className: "text-3xl font-bold text-gray-800 mb-2" }, "Partie Terminée !"),
+        React.createElement("p", { className: "text-xl text-purple-600 font-bold mb-4" }, `${winner?.playerName} gagne !`),
+        React.createElement("div", { className: "space-y-2 mb-6" },
+          ranking.map((p, i) => React.createElement("div", { key: p?.id, className: "flex justify-between p-2 bg-gray-100 rounded-lg" },
+            React.createElement("span", null, `#${i + 1} ${p?.playerName}`),
+            React.createElement("span", { className: "font-bold" }, `${p?.pdv} PDV`)
+          ))
+        ),
+        React.createElement("button", { onClick: onBack, className: "w-full py-3 bg-purple-600 text-white rounded-xl font-bold" }, "Retour")
+      )
+    );
+  }
 
-  useEffect(() => {
-    if (currentPlayer && currentPlayer.pvCurrent <= 0 && !showDeath) setShowDeath(true);
-  }, [currentPlayer?.pvCurrent]);
+  const tabs = [
+    { id: 'tirages', label: '🎴', name: 'Tirages' },
+    { id: 'de', label: '🎲', name: 'Dé' },
+    { id: 'attaque', label: '⚔️', name: 'Attaque' },
+    { id: 'objectif', label: '🎯', name: 'Objectif' },
+    { id: 'echange', label: '🔄', name: 'Échange' },
+    { id: 'pari', label: '🎰', name: 'Pari' },
+    { id: 'event', label: '🎭', name: 'Event' },
+    { id: 'perso', label: '👤', name: 'Perso' },
+    { id: 'pdv', label: '🏆', name: 'PDV' }
+  ];
 
-  useEffect(() => {
-    if (totalPdv >= targetPdv && !showEndGame) setShowEndGame(true);
-  }, [totalPdv, targetPdv]);
-
-  const handleDeath = async () => {
-    await updatePlayer(playerIndex, { pvCurrent: currentPlayer.character.pvMax, effects: [], tourPlateau: 0 });
-    setShowDeath(false);
-  };
-
-  const handlePassStart = async () => {
-    const goldBonus = rulesEngine.getGoldOnStart(currentPlayer);
-    const territoryCount = countTerritoriesByBiome(currentPlayer.territories);
-    const resourceGains = { or: goldBonus, cuivre: territoryCount.FORET, argent: territoryCount.DESERT, obsidienne: territoryCount.MONTAGNE };
-    await updatePlayer(playerIndex, {
-      or: currentPlayer.or + resourceGains.or,
-      cuivre: currentPlayer.cuivre + resourceGains.cuivre,
-      argent: currentPlayer.argent + resourceGains.argent,
-      obsidienne: currentPlayer.obsidienne + resourceGains.obsidienne,
-      tourPlateau: currentPlayer.tourPlateau + 1,
-      blessAvailable: true, curseAvailable: true, rerollAvailable: true
-    });
-    setShowPassStart(false);
-  };
-
-  if (showDeath) return React.createElement(DeathOverlay, { player: currentPlayer, onContinue: handleDeath });
-  if (showPassStart) return React.createElement(StartPassOverlay, { player: currentPlayer, onConfirm: handlePassStart, onCancel: () => setShowPassStart(false) });
-  if (showEndGame) return React.createElement(EndGameScreen, { gameState, onRestart: () => window.location.reload() });
-
-  const tabs = ['anomalie', 'quete', 'statistique', 'de', 'personnage'];
-
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 flex flex-col" },
-    React.createElement("div", { className: `p-4 text-white ${isMyTurn ? 'bg-gradient-to-r from-green-600 to-teal-600' : 'bg-gradient-to-r from-gray-600 to-gray-700'}` },
-      React.createElement("div", { className: "max-w-4xl mx-auto flex items-center justify-between" },
+  return React.createElement("div", { className: "min-h-screen bg-gray-100 pb-20" },
+    // Header
+    React.createElement("div", { className: "bg-gradient-to-r from-purple-700 to-indigo-700 text-white p-3" },
+      React.createElement("div", { className: "flex justify-between items-center max-w-md mx-auto" },
         React.createElement("div", null,
-          React.createElement("div", { className: "text-sm font-semibold" }, isMyTurn ? "🎯 VOTRE TOUR" : `Tour de ${activePlayer?.playerName || '...'}`),
-          React.createElement("h2", { className: "text-xl font-bold" }, currentPlayer?.playerName),
-          React.createElement("p", { className: "text-sm opacity-90" }, currentPlayer?.character?.name)
+          React.createElement("div", { className: "font-bold" }, currentPlayer?.playerName),
+          React.createElement("div", { className: "text-sm opacity-80" }, currentPlayer?.character?.name)
         ),
         React.createElement("div", { className: "text-right" },
-          React.createElement("div", { className: "text-3xl font-bold" }, `${currentPlayer?.pvCurrent || 0}/${currentPlayer?.character?.pvMax || 0}`),
-          React.createElement("div", { className: "text-xs" }, "Points de Vie"),
-          React.createElement("div", { className: "text-sm mt-1" }, `🏆 ${currentPlayer?.pdv || 0} PDV`)
+          React.createElement("div", { className: "flex gap-2 text-sm" },
+            React.createElement("span", null, `❤️${currentPlayer?.pvCurrent}/${currentPlayer?.character?.pvMax}`),
+            React.createElement("span", null, `🏆${currentPlayer?.pdv}`)
+          ),
+          React.createElement("div", { className: "flex gap-1 text-xs" },
+            React.createElement("span", null, `💰${currentPlayer?.or}`),
+            React.createElement("span", null, `🥉${currentPlayer?.cuivre}`),
+            React.createElement("span", null, `🥈${currentPlayer?.argent}`),
+            React.createElement("span", null, `⬛${currentPlayer?.obsidienne}`)
+          )
         )
       )
     ),
-
-    React.createElement("div", { className: "bg-white shadow-md overflow-x-auto" },
-      React.createElement("div", { className: "max-w-4xl mx-auto flex" },
-        tabs.map(tab => React.createElement("button", {
-          key: tab, onClick: () => setActiveTab(tab),
-          className: `flex-shrink-0 px-4 py-3 font-semibold text-sm border-b-4 ${activeTab === tab ? 'bg-blue-600 text-white border-blue-800' : 'bg-gray-100 text-gray-600 border-transparent'}`
-        }, tab === 'anomalie' ? '🎴 Anomalie' : tab === 'quete' ? '📜 Quête' : tab === 'statistique' ? '📊 Stat' : tab === 'de' ? '🎲 Dé' : '👤 Perso'))
-      )
+    // Turn indicator
+    React.createElement("div", { className: `text-center py-2 ${isMyTurn ? 'bg-green-500 text-white' : 'bg-yellow-100 text-yellow-800'}` },
+      isMyTurn ? "🎯 C'est votre tour !" : `⏳ Tour de ${currentTurnPlayer?.playerName}`
     ),
-
-    React.createElement("div", { className: "flex-1 overflow-y-auto" },
-      React.createElement("div", { className: "max-w-4xl mx-auto p-4" },
-        React.createElement("div", { className: "bg-white rounded-2xl shadow-lg p-6 mb-4" },
-          activeTab === 'anomalie' && React.createElement(AnomalieTab, { player: currentPlayer, gameState, updateGame, updatePlayer: (u) => updatePlayer(playerIndex, u), isMyTurn }),
-          activeTab === 'quete' && React.createElement(QueteTab, { player: currentPlayer, gameState, updateGame, updatePlayer: (u) => updatePlayer(playerIndex, u), isMyTurn }),
-          activeTab === 'statistique' && React.createElement(StatistiqueTab, {}),
-          activeTab === 'de' && React.createElement(DeTab, { player: currentPlayer, gameState, players, updatePlayer: (idx, u) => updatePlayer(idx, u), playerIndex, isMyTurn }),
-          activeTab === 'personnage' && React.createElement(PersonnageTab, { player: currentPlayer, updatePlayer: (u) => updatePlayer(playerIndex, u), gameState, players, updateGame, playerIndex, onPassStart: () => setShowPassStart(true), isMyTurn })
-        ),
-
-        React.createElement("div", { className: "bg-purple-100 rounded-xl p-3 mb-4" },
-          React.createElement("div", { className: "flex justify-between items-center text-sm" },
-            React.createElement("span", { className: "text-purple-700 font-semibold" }, `Total PDV: ${totalPdv} / ${targetPdv}`),
-            React.createElement("span", { className: "text-purple-600" }, `${Math.round(totalPdv / targetPdv * 100)}%`)
-          ),
-          React.createElement("div", { className: "w-full bg-purple-200 rounded-full h-2 mt-2" },
-            React.createElement("div", { className: "bg-purple-600 h-2 rounded-full transition-all", style: { width: `${Math.min(100, totalPdv / targetPdv * 100)}%` } })
-          )
-        ),
-
-        React.createElement("button", {
-          onClick: nextTurn, disabled: !isMyTurn,
-          className: `w-full py-4 rounded-xl font-bold text-lg ${isMyTurn ? 'bg-gradient-to-r from-green-600 to-teal-600 text-white' : 'bg-gray-300 text-gray-500'}`
-        }, isMyTurn ? "✓ Fin du tour" : "En attente...")
-      )
+    // Tab content
+    React.createElement("div", { className: "p-4 max-w-md mx-auto" },
+      activeTab === 'tirages' && React.createElement(TiragesTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame }),
+      activeTab === 'de' && React.createElement(DeTab, { player: currentPlayer, playerIndex, isMyTurn, updatePlayer, gameState }),
+      activeTab === 'attaque' && React.createElement(AttaqueTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory, players }),
+      activeTab === 'objectif' && React.createElement(ObjectifTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory }),
+      activeTab === 'echange' && React.createElement(EchangeTab, { player: currentPlayer, playerIndex, isMyTurn, updatePlayer }),
+      activeTab === 'pari' && React.createElement(PariTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, players }),
+      activeTab === 'event' && React.createElement(EventTab, { gameState, updateGame, isMyTurn }),
+      activeTab === 'perso' && React.createElement(PersonnageTab, { player: currentPlayer, playerIndex, isMyTurn, updatePlayer }),
+      activeTab === 'pdv' && React.createElement(PdvHistoryTab, { player: currentPlayer, gameState, players })
+    ),
+    // End turn button
+    isMyTurn && React.createElement("div", { className: "fixed bottom-16 left-0 right-0 p-2 bg-white border-t" },
+      React.createElement("button", { onClick: nextTurn, className: "w-full max-w-md mx-auto block py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold" }, "✅ Fin du Tour")
+    ),
+    // Tab bar
+    React.createElement("div", { className: "fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2" },
+      tabs.map(t => React.createElement("button", { key: t.id, onClick: () => setActiveTab(t.id), className: `flex flex-col items-center px-2 ${activeTab === t.id ? 'text-purple-600' : 'text-gray-400'}` },
+        React.createElement("span", { className: "text-lg" }, t.label),
+        React.createElement("span", { className: "text-xs" }, t.name)
+      ))
     )
   );
 }
 
-// ============= OVERLAYS =============
-function DeathOverlay({ player, onContinue }) {
-  return React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-6" },
-    React.createElement("div", { className: "bg-white rounded-2xl p-8 max-w-md w-full text-center" },
-      React.createElement("div", { className: "text-6xl mb-4" }, "💀"),
-      React.createElement("h2", { className: "text-3xl font-bold text-red-600 mb-4" }, "Mort !"),
-      React.createElement("p", { className: "text-gray-600 mb-6" }, `${player.playerName} a été vaincu et retourne au départ.`),
-      React.createElement("button", { onClick: onContinue, className: "w-full py-3 bg-red-600 text-white rounded-xl font-bold" }, "Continuer")
-    )
-  );
-}
+// ============= TIRAGES TAB =============
+function TiragesTab({ gameState, player, playerIndex, isMyTurn, updatePlayer, updateGame }) {
+  const [subTab, setSubTab] = useState('anomalie');
+  const [drawnCard, setDrawnCard] = useState(null);
+  const [processing, setProcessing] = useState(false);
 
-function StartPassOverlay({ player, onConfirm, onCancel }) {
-  const goldBonus = rulesEngine.getGoldOnStart(player);
-  const territories = countTerritoriesByBiome(player.territories);
-  return React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6" },
-    React.createElement("div", { className: "bg-white rounded-2xl p-6 max-w-md w-full" },
-      React.createElement("h2", { className: "text-2xl font-bold text-amber-600 mb-4 text-center" }, "🏁 Passage par le Départ"),
-      React.createElement("div", { className: "bg-amber-50 rounded-xl p-4 mb-4" },
-        React.createElement("p", { className: "font-semibold text-gray-700 mb-2" }, "Vous recevez :"),
-        goldBonus > 0 && React.createElement("p", { className: "text-amber-700" }, `🪙 +${goldBonus} Or (Marchand)`),
-        territories.FORET > 0 && React.createElement("p", { className: "text-green-700" }, `🌳 +${territories.FORET} Cuivre`),
-        territories.DESERT > 0 && React.createElement("p", { className: "text-yellow-700" }, `🏜️ +${territories.DESERT} Argent`),
-        territories.MONTAGNE > 0 && React.createElement("p", { className: "text-gray-700" }, `⛰️ +${territories.MONTAGNE} Obsidienne`),
-        React.createElement("p", { className: "text-purple-700 mt-2" }, "✨ Pouvoirs rechargés !")
+  const drawAnomaly = async () => {
+    if (!isMyTurn || processing) return;
+    setProcessing(true);
+    const available = ANOMALIES.filter((_, i) => !(gameState.drawnAnomalies || []).includes(i));
+    if (available.length === 0) { await updateGame({ drawnAnomalies: [] }); setProcessing(false); return; }
+    const idx = ANOMALIES.indexOf(available[Math.floor(Math.random() * available.length)]);
+    const card = ANOMALIES[idx];
+    await updateGame({ drawnAnomalies: [...(gameState.drawnAnomalies || []), idx] });
+    setDrawnCard({ type: 'anomalie', text: card, parsed: parseAnomaly(card) });
+    setProcessing(false);
+  };
+
+  const drawQuest = async () => {
+    if (!isMyTurn || processing) return;
+    setProcessing(true);
+    const available = QUETES.filter((_, i) => !(gameState.drawnQuetes || []).includes(i));
+    if (available.length === 0) { await updateGame({ drawnQuetes: [] }); setProcessing(false); return; }
+    const idx = QUETES.indexOf(available[Math.floor(Math.random() * available.length)]);
+    const card = QUETES[idx];
+    await updateGame({ drawnQuetes: [...(gameState.drawnQuetes || []), idx] });
+    setDrawnCard({ type: 'quete', text: card, parsed: parseQuest(card) });
+    setProcessing(false);
+  };
+
+  const applyAnomaly = async () => {
+    if (!drawnCard || drawnCard.type !== 'anomalie') return;
+    const p = drawnCard.parsed;
+    const updates = {};
+    if (p.type === 'heal') updates.pvCurrent = Math.min(player.character.pvMax, player.pvCurrent + p.amount);
+    if (p.type === 'damage') updates.pvCurrent = Math.max(0, player.pvCurrent - p.amount);
+    if (p.type === 'gain') updates[p.resource] = (player[p.resource] || 0) + p.amount;
+    if (p.type === 'lose') updates[p.resource] = Math.max(0, (player[p.resource] || 0) - p.amount);
+    if (p.type === 'bless') updates.effects = [...(player.effects || []), { id: `eff_${Date.now()}`, type: 'BLESS', name: 'Bénédiction', stat: p.stat, delta: 2 }];
+    if (p.type === 'curse') updates.effects = [...(player.effects || []), { id: `eff_${Date.now()}`, type: 'CURSE', name: 'Malédiction', stat: p.stat, delta: -2 }];
+    if (Object.keys(updates).length > 0) await updatePlayer(playerIndex, updates);
+    setDrawnCard(null);
+  };
+
+  const keepQuest = async () => {
+    if (!drawnCard || drawnCard.type !== 'quete') return;
+    await updatePlayer(playerIndex, { quests: [...(player.quests || []), { id: `quest_${Date.now()}`, text: drawnCard.text, ...drawnCard.parsed }] });
+    setDrawnCard(null);
+  };
+
+  if (drawnCard) {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: `p-6 rounded-xl text-center ${drawnCard.type === 'anomalie' ? 'bg-gradient-to-r from-purple-600 to-pink-600' : 'bg-gradient-to-r from-amber-500 to-orange-500'} text-white` },
+        React.createElement("div", { className: "text-4xl mb-3" }, drawnCard.type === 'anomalie' ? '🌀' : '📜'),
+        React.createElement("h3", { className: "text-xl font-bold mb-2" }, drawnCard.type === 'anomalie' ? 'Anomalie' : 'Quête'),
+        React.createElement("p", { className: "text-lg" }, drawnCard.text)
       ),
-      React.createElement("div", { className: "flex gap-3" },
-        React.createElement("button", { onClick: onCancel, className: "flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold" }, "Annuler"),
-        React.createElement("button", { onClick: onConfirm, className: "flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold" }, "Confirmer")
+      drawnCard.type === 'anomalie' && React.createElement("button", { onClick: applyAnomaly, className: "w-full py-3 bg-purple-600 text-white rounded-xl font-bold" }, "Appliquer l'effet"),
+      drawnCard.type === 'quete' && React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+        React.createElement("button", { onClick: keepQuest, className: "py-3 bg-green-600 text-white rounded-xl font-bold" }, "Garder"),
+        React.createElement("button", { onClick: () => setDrawnCard(null), className: "py-3 bg-gray-400 text-white rounded-xl font-bold" }, "Défausser")
+      )
+    );
+  }
+
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("div", { className: "flex gap-2 mb-4" },
+      React.createElement("button", { onClick: () => setSubTab('anomalie'), className: `flex-1 py-2 rounded-lg font-semibold ${subTab === 'anomalie' ? 'bg-purple-600 text-white' : 'bg-gray-200'}` }, "🌀 Anomalies"),
+      React.createElement("button", { onClick: () => setSubTab('quete'), className: `flex-1 py-2 rounded-lg font-semibold ${subTab === 'quete' ? 'bg-amber-500 text-white' : 'bg-gray-200'}` }, "📜 Quêtes")
+    ),
+    subTab === 'anomalie' && React.createElement("div", { className: "text-center" },
+      React.createElement("div", { className: "bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-8 mb-4" },
+        React.createElement("div", { className: "text-6xl mb-4" }, "🌀"),
+        React.createElement("p", { className: "text-white text-lg" }, `${ANOMALIES.length - (gameState.drawnAnomalies || []).length} cartes restantes`)
+      ),
+      React.createElement("button", { onClick: drawAnomaly, disabled: !isMyTurn || processing, className: `w-full py-4 rounded-xl font-bold text-lg ${isMyTurn ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-500'}` }, processing ? "..." : "Tirer une Anomalie")
+    ),
+    subTab === 'quete' && React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: "bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-8 text-center" },
+        React.createElement("div", { className: "text-6xl mb-4" }, "📜"),
+        React.createElement("p", { className: "text-white text-lg" }, `${QUETES.length - (gameState.drawnQuetes || []).length} cartes restantes`)
+      ),
+      React.createElement("button", { onClick: drawQuest, disabled: !isMyTurn || processing, className: `w-full py-4 rounded-xl font-bold text-lg ${isMyTurn ? 'bg-amber-500 text-white' : 'bg-gray-300 text-gray-500'}` }, processing ? "..." : "Tirer une Quête"),
+      (player.quests || []).length > 0 && React.createElement("div", null,
+        React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "Vos quêtes:"),
+        React.createElement("div", { className: "space-y-2" },
+          (player.quests || []).map(q => React.createElement("div", { key: q.id, className: "p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm" }, q.text))
+        )
       )
     )
   );
 }
 
-function EndGameScreen({ gameState, onRestart }) {
-  const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
-  const ranking = [...players].filter(p => p).sort((a, b) => (b?.pdv || 0) - (a?.pdv || 0));
-  const winner = ranking[0];
-  return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-6" },
-    React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center" },
-      React.createElement("div", { className: "text-6xl mb-4" }, "🏆"),
-      React.createElement("h1", { className: "text-4xl font-bold text-gray-800 mb-2" }, "Victoire !"),
-      React.createElement("p", { className: "text-2xl text-amber-600 font-bold mb-6" }, winner?.playerName),
-      React.createElement("div", { className: "space-y-3 mb-6" },
-        ranking.map((p, i) => p && React.createElement("div", {
-          key: p.id,
-          className: `flex items-center justify-between p-3 rounded-lg ${i === 0 ? 'bg-yellow-100' : 'bg-gray-50'}`
-        },
-          React.createElement("span", { className: `font-bold ${i === 0 ? 'text-yellow-600' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-amber-600' : 'text-gray-600'}` }, `#${i + 1}`),
-          React.createElement("span", { className: "font-semibold" }, p.playerName),
-          React.createElement("span", { className: "font-bold text-purple-600" }, `${p.pdv} PDV`)
+// ============= DE TAB =============
+function DeTab({ player, playerIndex, isMyTurn, updatePlayer, gameState }) {
+  const [stat, setStat] = useState(null);
+  const [rolling, setRolling] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const roll = async (statKey) => {
+    if (!isMyTurn) return;
+    setStat(statKey);
+    setRolling(true);
+    await new Promise(r => setTimeout(r, 1000));
+    const base = player.baseStats?.[statKey] || 0;
+    const effectBonus = (player.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
+    const eventBonus = gameState.eventBonus || 0;
+    const dice = Math.floor(Math.random() * 6) + 1;
+    const total = base + effectBonus + eventBonus + dice;
+    setResult({ stat: STAT_NAMES[statKey], base, effectBonus, eventBonus, dice, total });
+    setRolling(false);
+  };
+
+  const reset = () => { setStat(null); setResult(null); };
+
+  if (rolling) {
+    return React.createElement("div", { className: "min-h-[300px] bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center" },
+      React.createElement("div", { className: "text-white text-center" },
+        React.createElement("div", { className: "text-6xl animate-spin mb-4" }, "🎲"),
+        React.createElement("p", { className: "text-xl" }, "Lancement...")
+      )
+    );
+  }
+
+  if (result) {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: "bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white text-center" },
+        React.createElement("h3", { className: "text-xl mb-2" }, result.stat),
+        React.createElement("div", { className: "text-6xl font-bold mb-4" }, result.total),
+        React.createElement("div", { className: "text-sm opacity-80" }, `Base: ${result.base} | Dé: ${result.dice}${result.effectBonus ? ` | Effets: ${result.effectBonus > 0 ? '+' : ''}${result.effectBonus}` : ''}${result.eventBonus ? ` | Event: +${result.eventBonus}` : ''}`)
+      ),
+      React.createElement("button", { onClick: reset, className: "w-full py-3 bg-gray-600 text-white rounded-xl font-bold" }, "Nouveau jet")
+    );
+  }
+
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center text-gray-800" }, "🎲 Lancer le Dé"),
+    React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+      Object.entries(STAT_NAMES).map(([k, n]) => {
+        const base = player.baseStats?.[k] || 0;
+        const bonus = (player.effects || []).filter(e => e.stat === k).reduce((s, e) => s + e.delta, 0);
+        return React.createElement("button", { key: k, onClick: () => roll(k), disabled: !isMyTurn, className: `p-4 rounded-xl text-center ${isMyTurn ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-300 text-gray-500'}` },
+          React.createElement("div", { className: "font-bold" }, n),
+          React.createElement("div", { className: "text-2xl" }, `${base}${bonus ? (bonus > 0 ? `+${bonus}` : bonus) : ''}`),
+          React.createElement("div", { className: "text-xs opacity-80" }, "+ 🎲")
+        );
+      })
+    )
+  );
+}
+
+// ============= ATTAQUE TAB =============
+function AttaqueTab({ gameState, player, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory, players }) {
+  const [subTab, setSubTab] = useState('biome');
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("div", { className: "flex gap-2 mb-4" },
+      React.createElement("button", { onClick: () => setSubTab('biome'), className: `flex-1 py-2 rounded-lg font-semibold text-sm ${subTab === 'biome' ? 'bg-green-600 text-white' : 'bg-gray-200'}` }, "🏰 Biome"),
+      React.createElement("button", { onClick: () => setSubTab('boss'), className: `flex-1 py-2 rounded-lg font-semibold text-sm ${subTab === 'boss' ? 'bg-red-600 text-white' : 'bg-gray-200'}` }, "🐉 Boss"),
+      React.createElement("button", { onClick: () => setSubTab('combat'), className: `flex-1 py-2 rounded-lg font-semibold text-sm ${subTab === 'combat' ? 'bg-orange-600 text-white' : 'bg-gray-200'}` }, "⚔️ Combat")
+    ),
+    subTab === 'biome' && React.createElement(BiomeAttack, { gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }),
+    subTab === 'boss' && React.createElement(BossAttack, { gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory }),
+    subTab === 'combat' && React.createElement(CombatAttack, { gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players })
+  );
+}
+
+function BiomeAttack({ gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }) {
+  const [mode, setMode] = useState('select');
+  const [target, setTarget] = useState(null);
+  const [stat, setStat] = useState(null);
+  const [rolling, setRolling] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const biomeList = Object.entries(BIOMES).map(([k, b]) => ({ key: k, ...b, difficulty: 6 + (k === 'DESERT' ? 2 : k === 'MONTAGNE' ? 4 : 0) }));
+
+  const selectBiome = (b) => { setTarget(b); setMode('stat'); };
+  const chooseStat = (k, n) => { setStat({ key: k, name: n }); execute(target, k, n); };
+
+  const execute = async (biome, statKey, statName) => {
+    setMode('rolling'); setRolling(true);
+    await new Promise(r => setTimeout(r, 1500));
+    const base = player.baseStats?.[statKey] || 0;
+    const effectBonus = (player.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
+    const eventBonus = gameState.eventBonus || 0;
+    const charBonus = rulesEngine.getAttackBonus(player, { isNeutral: true }).bonus;
+    const dice = Math.floor(Math.random() * 6) + 1;
+    const total = base + effectBonus + eventBonus + charBonus + dice;
+    const win = total >= biome.difficulty;
+    let res = { stat: statName, base, effectBonus, eventBonus, charBonus, dice, total, difficulty: biome.difficulty, win, biome };
+    if (win) {
+      const newTerr = { id: `terr_${Date.now()}`, biome: biome.key, name: biome.name };
+      await updatePlayer(playerIndex, { usedAttackDice: true, territories: [...(player.territories || []), newTerr], [biome.resource]: (player[biome.resource] || 0) + 1 });
+      await addPdvWithHistory(playerIndex, 1, 'TERRITORY', { biome: biome.name });
+      res.pdv = 1;
+    } else {
+      await updatePlayer(playerIndex, { usedAttackDice: true });
+    }
+    setResult(res); setRolling(false); setMode('result');
+  };
+
+  const reset = () => { setMode('select'); setTarget(null); setStat(null); setResult(null); };
+
+  if (mode === 'stat') {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("h3", { className: "text-xl font-bold text-center" }, `🏰 Attaque ${target.name}`),
+      React.createElement("p", { className: "text-center text-gray-600" }, `Difficulté: ${target.difficulty}`),
+      React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+        Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("button", { key: k, onClick: () => chooseStat(k, n), className: "py-3 bg-green-600 text-white rounded-lg font-semibold" }, n))
+      ),
+      React.createElement("button", { onClick: reset, className: "w-full py-2 bg-gray-600 text-white rounded-lg" }, "Annuler")
+    );
+  }
+
+  if (rolling) {
+    return React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl flex items-center justify-center" },
+      React.createElement("p", { className: "text-white text-xl animate-pulse" }, "🏰 Conquête...")
+    );
+  }
+
+  if (mode === 'result' && result) {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: `p-6 rounded-xl text-white text-center ${result.win ? 'bg-green-600' : 'bg-red-600'}` },
+        React.createElement("div", { className: "text-2xl font-bold" }, result.win ? "✅ VICTOIRE" : "❌ ÉCHEC"),
+        React.createElement("div", { className: "text-lg mt-2" }, `${result.total} vs ${result.difficulty}`),
+        result.win && React.createElement("div", { className: "mt-2" }, `+1 ${result.biome.resource} +${result.pdv} PDV`)
+      ),
+      React.createElement("button", { onClick: reset, className: "w-full py-3 bg-gray-600 text-white rounded-xl" }, "Fermer")
+    );
+  }
+
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center" }, "🏰 Conquête de Biome"),
+    player.usedAttackDice && React.createElement("div", { className: "p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center" }, React.createElement("p", { className: "text-yellow-800" }, "⚠️ Jet utilisé ce tour")),
+    React.createElement("div", { className: "space-y-3" },
+      biomeList.map(b => React.createElement("button", { key: b.key, onClick: () => selectBiome(b), disabled: player.usedAttackDice || !isMyTurn, className: `w-full p-4 rounded-xl text-left ${!player.usedAttackDice && isMyTurn ? `bg-gradient-to-r ${b.color} text-white` : 'bg-gray-300 text-gray-500'}` },
+        React.createElement("div", { className: "flex justify-between items-center" },
+          React.createElement("span", { className: "text-lg font-bold" }, `${b.emoji} ${b.name}`),
+          React.createElement("span", null, `Diff: ${b.difficulty}`)
+        )
+      ))
+    )
+  );
+}
+
+function BossAttack({ gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory }) {
+  const [mode, setMode] = useState('select');
+  const [target, setTarget] = useState(null);
+  const [stat, setStat] = useState(null);
+  const [rolling, setRolling] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const territoryCounts = countTerritoriesByBiome(player.territories);
+  const defeatedBosses = player.defeatedBosses || [];
+  const bossList = Object.entries(BOSSES).filter(([k]) => !defeatedBosses.includes(k) && territoryCounts[k] >= 2).map(([k, b]) => ({ key: k, ...b }));
+
+  const selectBoss = (b) => { setTarget(b); setMode('stat'); };
+  const chooseStat = (k, n) => { setStat({ key: k, name: n }); execute(target, k, n); };
+
+  const execute = async (boss, statKey, statName) => {
+    setMode('rolling'); setRolling(true);
+    await new Promise(r => setTimeout(r, 1500));
+    const base = player.baseStats?.[statKey] || 0;
+    const effectBonus = (player.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
+    const dice = Math.floor(Math.random() * 6) + 1;
+    const total = base + effectBonus + dice;
+    const win = total >= boss.difficulty;
+    let res = { stat: statName, base, effectBonus, dice, total, difficulty: boss.difficulty, win, boss };
+    if (win) {
+      await updatePlayer(playerIndex, { usedAttackDice: true, defeatedBosses: [...defeatedBosses, boss.key] });
+      await addPdvWithHistory(playerIndex, boss.pdv, 'BOSS', { boss: boss.name });
+      res.pdv = boss.pdv;
+    } else {
+      await updatePlayer(playerIndex, { usedAttackDice: true, pvCurrent: Math.max(0, player.pvCurrent - 2) });
+      res.damage = 2;
+    }
+    setResult(res); setRolling(false); setMode('result');
+  };
+
+  const reset = () => { setMode('select'); setTarget(null); setStat(null); setResult(null); };
+
+  if (mode === 'stat') {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("h3", { className: "text-xl font-bold text-center" }, `🐉 ${target.name}`),
+      React.createElement("p", { className: "text-center text-gray-600" }, `Difficulté: ${target.difficulty}`),
+      React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+        Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("button", { key: k, onClick: () => chooseStat(k, n), className: "py-3 bg-red-600 text-white rounded-lg font-semibold" }, n))
+      ),
+      React.createElement("button", { onClick: reset, className: "w-full py-2 bg-gray-600 text-white rounded-lg" }, "Annuler")
+    );
+  }
+
+  if (rolling) {
+    return React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-red-600 to-red-800 rounded-xl flex items-center justify-center" },
+      React.createElement("p", { className: "text-white text-xl animate-pulse" }, "🐉 Combat de Boss...")
+    );
+  }
+
+  if (mode === 'result' && result) {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: `p-6 rounded-xl text-white text-center ${result.win ? 'bg-green-600' : 'bg-red-600'}` },
+        React.createElement("div", { className: "text-2xl font-bold" }, result.win ? "✅ BOSS VAINCU" : "❌ DÉFAITE"),
+        React.createElement("div", { className: "text-lg mt-2" }, `${result.total} vs ${result.difficulty}`),
+        result.win && React.createElement("div", { className: "mt-2" }, `+${result.pdv} PDV`),
+        result.damage && React.createElement("div", { className: "mt-2" }, `💔 -${result.damage} PV`)
+      ),
+      React.createElement("button", { onClick: reset, className: "w-full py-3 bg-gray-600 text-white rounded-xl" }, "Fermer")
+    );
+  }
+
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center" }, "🐉 Combat de Boss"),
+    player.usedAttackDice && React.createElement("div", { className: "p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center" }, React.createElement("p", { className: "text-yellow-800" }, "⚠️ Jet utilisé")),
+    bossList.length === 0 ? React.createElement("div", { className: "p-6 bg-gray-100 rounded-xl text-center" },
+      React.createElement("p", { className: "text-gray-600" }, "Aucun boss disponible"),
+      React.createElement("p", { className: "text-sm text-gray-500 mt-2" }, "Besoin de 2 territoires du biome")
+    ) : React.createElement("div", { className: "space-y-3" },
+      bossList.map(b => React.createElement("button", { key: b.key, onClick: () => selectBoss(b), disabled: player.usedAttackDice || !isMyTurn, className: `w-full p-4 rounded-xl text-left ${!player.usedAttackDice && isMyTurn ? 'bg-gradient-to-r from-red-600 to-red-800 text-white' : 'bg-gray-300'}` },
+        React.createElement("div", { className: "flex justify-between items-center" },
+          React.createElement("span", { className: "text-lg font-bold" }, `${b.emoji} ${b.name}`),
+          React.createElement("span", null, `Diff: ${b.difficulty} | +${b.pdv} PDV`)
+        )
+      ))
+    )
+  );
+}
+
+function CombatAttack({ gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }) {
+  const [mode, setMode] = useState('select');
+  const [target, setTarget] = useState(null);
+  const [stat, setStat] = useState(null);
+  const [sacrifice, setSacrifice] = useState(0);
+  const [rolling, setRolling] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const opponents = ensureArray(players).filter((p, i) => p && i !== playerIndex && p.pvCurrent > 0);
+  const canChooseStat = rulesEngine.canChooseStat(player);
+  const canSacrifice = rulesEngine.canSacrificePv(player);
+
+  const start = () => {
+    if (opponents.length === 1) { setTarget(opponents[0]); setMode(canChooseStat ? 'stat' : (canSacrifice ? 'sacrifice' : 'confirm')); }
+    else setMode('target');
+  };
+
+  const selectTarget = (t) => { setTarget(t); setMode(canChooseStat ? 'stat' : (canSacrifice ? 'sacrifice' : 'confirm')); };
+  const chooseStat = (k, n) => { setStat({ key: k, name: n }); setMode(canSacrifice ? 'sacrifice' : 'confirm'); };
+
+  const execute = async (defender, statKey, statName, sacrificePv) => {
+    setMode('rolling'); setRolling(true);
+    await new Promise(r => setTimeout(r, 1500));
+
+    const stats = Object.keys(STAT_NAMES);
+    const usedStat = statKey || stats[Math.floor(Math.random() * stats.length)];
+    const usedStatName = statName || STAT_NAMES[usedStat];
+
+    const attBase = player.baseStats?.[usedStat] || 0;
+    const attEffect = (player.effects || []).filter(e => e.stat === usedStat).reduce((s, e) => s + e.delta, 0);
+    const attDice = Math.floor(Math.random() * 6) + 1;
+    const attTotal = attBase + attEffect + sacrificePv + attDice;
+
+    const defBase = defender.baseStats?.[usedStat] || 0;
+    const defEffect = (defender.effects || []).filter(e => e.stat === usedStat).reduce((s, e) => s + e.delta, 0);
+    const defDice = Math.floor(Math.random() * 6) + 1;
+    const defTotal = defBase + defEffect + defDice;
+
+    const draw = attTotal === defTotal;
+    const win = attTotal > defTotal;
+
+    let res = { stat: usedStatName, att: { base: attBase, effect: attEffect, sacrifice: sacrificePv, dice: attDice, total: attTotal }, def: { base: defBase, effect: defEffect, dice: defDice, total: defTotal }, draw, win, target: defender };
+
+    const defIdx = players.findIndex(p => p && p.id === defender.id);
+
+    if (sacrificePv > 0) await updatePlayer(playerIndex, { pvCurrent: player.pvCurrent - sacrificePv });
+
+    if (win) {
+      const damage = Math.max(1, attTotal - defTotal);
+      const newDefPv = Math.max(0, defender.pvCurrent - damage);
+      const died = newDefPv <= 0;
+      const heal = rulesEngine.getHealOnSuccess(player);
+      res.damage = damage; res.died = died;
+
+      if (defIdx >= 0) await db.ref(`games/${gameState.code}/players/${defIdx}`).update({ pvCurrent: newDefPv });
+      if (heal > 0) await updatePlayer(playerIndex, { pvCurrent: Math.min(player.character.pvMax, player.pvCurrent + heal) });
+
+      if (died) {
+        const killPdv = 2 + rulesEngine.getKillBonus(player, defender);
+        await addPdvWithHistory(playerIndex, killPdv, 'KILL', { victim: defender.playerName });
+        res.pdv = killPdv;
+      }
+    } else if (!draw) {
+      const counterDmg = player.characterKey === 'CHASSEUR' ? 0 : 1;
+      if (counterDmg > 0) {
+        await updatePlayer(playerIndex, { pvCurrent: Math.max(0, player.pvCurrent - counterDmg) });
+        res.counter = counterDmg;
+      }
+    }
+
+    await updatePlayer(playerIndex, { usedAttackDice: true });
+    setResult(res); setRolling(false); setMode('result');
+  };
+
+  const reset = () => { setMode('select'); setTarget(null); setStat(null); setSacrifice(0); setResult(null); };
+
+  if (mode === 'target') {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("h3", { className: "text-xl font-bold text-center" }, "Choisir cible"),
+      React.createElement("div", { className: "space-y-2" },
+        opponents.map(o => React.createElement("button", { key: o.id, onClick: () => selectTarget(o), className: "w-full p-4 bg-red-600 text-white rounded-lg" },
+          React.createElement("div", { className: "flex justify-between" },
+            React.createElement("span", { className: "font-bold" }, o.playerName),
+            React.createElement("span", null, `❤️ ${o.pvCurrent}`)
+          )
         ))
       ),
-      React.createElement("button", { onClick: onRestart, className: "w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold" }, "Nouvelle partie")
-    )
-  );
-}
+      React.createElement("button", { onClick: reset, className: "w-full py-2 bg-gray-600 text-white rounded-lg" }, "Annuler")
+    );
+  }
 
-// ============= ANOMALIE TAB =============
-function AnomalieTab({ player, gameState, updateGame, updatePlayer, isMyTurn }) {
-  const [currentCard, setCurrentCard] = useState(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-
-  const drawCard = async () => {
-    if (!isMyTurn) return;
-    const available = ANOMALIES.filter((_, i) => !(gameState.drawnAnomalies || []).includes(i));
-    if (available.length === 0) { alert("Toutes les anomalies ont été tirées !"); return; }
-
-    setIsAnimating(true);
-    setTimeout(async () => {
-      const idx = Math.floor(Math.random() * available.length);
-      const card = available[idx];
-      const origIdx = ANOMALIES.indexOf(card);
-
-      await updateGame({ drawnAnomalies: [...(gameState.drawnAnomalies || []), origIdx] });
-      setCurrentCard(card);
-      setIsAnimating(false);
-
-      const effect = parseAnomaly(card);
-      applyEffect(effect);
-    }, 300);
-  };
-
-  const applyEffect = async (effect) => {
-    const updates = {};
-    if (effect.type === 'heal') updates.pvCurrent = Math.min(player.character.pvMax, player.pvCurrent + effect.amount);
-    else if (effect.type === 'damage') updates.pvCurrent = Math.max(0, player.pvCurrent - effect.amount);
-    else if (effect.type === 'bless') updates.effects = [...(player.effects || []), { id: `eff_${Date.now()}`, type: 'BLESS', stat: effect.stat, delta: 2, name: `Bénédiction de ${effect.statName}` }];
-    else if (effect.type === 'curse') updates.effects = [...(player.effects || []), { id: `eff_${Date.now()}`, type: 'CURSE', stat: effect.stat, delta: -2, name: `Malédiction de ${effect.statName}` }];
-    else if (effect.type === 'gainOr') updates.or = player.or + effect.amount;
-    else if (effect.type === 'loseOr') updates.or = Math.max(0, player.or - effect.amount);
-    else if (effect.type === 'gainCuivre') updates.cuivre = player.cuivre + effect.amount;
-    else if (effect.type === 'loseCuivre') updates.cuivre = Math.max(0, player.cuivre - effect.amount);
-    else if (effect.type === 'gainArgent') updates.argent = player.argent + effect.amount;
-    else if (effect.type === 'loseArgent') updates.argent = Math.max(0, player.argent - effect.amount);
-    else if (effect.type === 'gainObsidienne') updates.obsidienne = player.obsidienne + effect.amount;
-    else if (effect.type === 'loseObsidienne') updates.obsidienne = Math.max(0, player.obsidienne - effect.amount);
-    if (Object.keys(updates).length > 0) await updatePlayer(updates);
-  };
-
-  const resetDeck = async () => {
-    if (confirm("Réinitialiser le deck d'anomalies ?")) {
-      await updateGame({ drawnAnomalies: [] });
-      setCurrentCard(null);
-    }
-  };
-
-  const remaining = ANOMALIES.length - (gameState.drawnAnomalies || []).length;
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("div", { className: "text-center" },
-      React.createElement("h3", { className: "text-2xl font-bold text-gray-800 mb-2" }, "🎴 Anomalies"),
-      React.createElement("p", { className: "text-gray-600" }, `Cartes restantes: ${remaining} / ${ANOMALIES.length}`)
-    ),
-    React.createElement("div", { className: `min-h-[180px] bg-gradient-to-r from-purple-600 to-purple-800 rounded-xl p-6 flex items-center justify-center transition-all ${isAnimating ? 'scale-95 opacity-50' : ''}` },
-      currentCard ? React.createElement("p", { className: "text-lg text-center text-white font-medium" }, currentCard) : React.createElement("p", { className: "text-gray-300 text-center italic" }, 'Cliquez sur "Tirer une anomalie"')
-    ),
-    React.createElement("div", { className: "grid grid-cols-2 gap-4" },
-      React.createElement("button", { onClick: drawCard, disabled: !isMyTurn || isAnimating, className: `py-4 rounded-xl font-semibold ${isMyTurn ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-300 text-gray-500'}` }, "Tirer une anomalie"),
-      React.createElement("button", { onClick: resetDeck, className: "py-4 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700" }, "Réinitialiser")
-    ),
-    React.createElement("div", { className: "bg-blue-50 rounded-xl p-4 text-sm text-gray-700" },
-      React.createElement("p", { className: "font-semibold" }, "ℹ️ Application automatique :"),
-      React.createElement("p", { className: "text-xs mt-1" }, "Soins, dégâts, bénédictions, malédictions et ressources sont appliqués automatiquement.")
-    )
-  );
-}
-
-// ============= QUETE TAB =============
-function QueteTab({ player, gameState, updateGame, updatePlayer, isMyTurn }) {
-  const [currentCard, setCurrentCard] = useState(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [attemptResult, setAttemptResult] = useState(null);
-  const [pendingQuest, setPendingQuest] = useState(null);
-
-  const drawCard = async () => {
-    if (!isMyTurn) return;
-    const available = QUETES.filter((_, i) => !(gameState.drawnQuetes || []).includes(i));
-    if (available.length === 0) { alert("Toutes les quêtes ont été tirées !"); return; }
-
-    setIsAnimating(true);
-    setTimeout(async () => {
-      const idx = Math.floor(Math.random() * available.length);
-      const card = available[idx];
-      const origIdx = QUETES.indexOf(card);
-
-      await updateGame({ drawnQuetes: [...(gameState.drawnQuetes || []), origIdx] });
-      setCurrentCard(card);
-      setIsAnimating(false);
-
-      const newQuest = { id: `quest_${Date.now()}`, text: card, completed: false };
-      if ((player.quests || []).length >= 2) {
-        setPendingQuest(newQuest);
-      } else {
-        await updatePlayer({ quests: [...(player.quests || []), newQuest] });
-      }
-    }, 300);
-  };
-
-  const handleQuestChoice = async (action, questIdToRemove = null) => {
-    if (action === 'refuse') {
-      setPendingQuest(null);
-    } else if (action === 'replace' && questIdToRemove) {
-      const newQuests = (player.quests || []).filter(q => q.id !== questIdToRemove);
-      newQuests.push(pendingQuest);
-      await updatePlayer({ quests: newQuests });
-      setPendingQuest(null);
-    }
-  };
-
-  const attemptQuest = async (questId, questText) => {
-    if (!isMyTurn || player.usedAttackDice) { alert("Jet d'attaque déjà utilisé ce tour !"); return; }
-    const questInfo = parseQuest(questText);
-    if (!questInfo.isCombat) return;
-
-    const statKey = questInfo.stat;
-    const diceRoll = Math.floor(Math.random() * 10);
-    const baseStat = (player.baseStats && player.baseStats[statKey]) || 0;
-    const effectsBonus = (player.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
-    const questBonus = rulesEngine.getQuestBonus(player);
-    const total = diceRoll + baseStat + effectsBonus + questBonus;
-    const success = total >= questInfo.difficulty;
-
-    setAttemptResult({ stat: STAT_NAMES[statKey], diceRoll, baseStat, effectsBonus, questBonus, total, difficulty: questInfo.difficulty, success, pdv: questInfo.pdv });
-
-    const updates = { usedAttackDice: true };
-    if (success) {
-      updates.quests = (player.quests || []).filter(q => q.id !== questId);
-      const pdvBonus = rulesEngine.getQuestPdvBonus(player);
-      updates.pdv = player.pdv + questInfo.pdv + pdvBonus;
-      updates.pdvHistory = [...(player.pdvHistory || []), { id: `pdv_${Date.now()}`, amount: questInfo.pdv + pdvBonus, source: 'QUEST' }];
-    } else {
-      const damage = Math.max(1, questInfo.difficulty - total);
-      updates.pvCurrent = Math.max(0, player.pvCurrent - damage);
-    }
-    await updatePlayer(updates);
-
-    setTimeout(() => setAttemptResult(null), 3000);
-  };
-
-  const completeExchangeQuest = async (questId, questText) => {
-    if (!isMyTurn) return;
-    const questInfo = parseQuest(questText);
-    if (!questInfo.isExchange) return;
-    if (player[questInfo.resourceKey] < questInfo.resourceAmount) {
-      alert(`Ressources insuffisantes ! (${player[questInfo.resourceKey]}/${questInfo.resourceAmount})`);
-      return;
-    }
-    const pdvBonus = rulesEngine.getQuestPdvBonus(player);
-    await updatePlayer({
-      quests: (player.quests || []).filter(q => q.id !== questId),
-      [questInfo.resourceKey]: player[questInfo.resourceKey] - questInfo.resourceAmount,
-      pdv: player.pdv + questInfo.pdv + pdvBonus,
-      pdvHistory: [...(player.pdvHistory || []), { id: `pdv_${Date.now()}`, amount: questInfo.pdv + pdvBonus, source: 'QUEST' }]
-    });
-  };
-
-  const resetDeck = async () => {
-    if (confirm("Réinitialiser le deck de quêtes ?")) {
-      await updateGame({ drawnQuetes: [] });
-      setCurrentCard(null);
-    }
-  };
-
-  const remaining = QUETES.length - (gameState.drawnQuetes || []).length;
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("div", { className: "text-center" },
-      React.createElement("h3", { className: "text-2xl font-bold text-gray-800 mb-2" }, "📜 Quêtes"),
-      React.createElement("p", { className: "text-gray-600" }, `Cartes restantes: ${remaining} / ${QUETES.length}`)
-    ),
-    React.createElement("div", { className: `min-h-[180px] bg-gradient-to-r from-green-600 to-green-800 rounded-xl p-6 flex items-center justify-center transition-all ${isAnimating ? 'scale-95 opacity-50' : ''}` },
-      currentCard ? React.createElement("p", { className: "text-sm text-center text-white font-medium" }, currentCard) : React.createElement("p", { className: "text-gray-300 text-center italic" }, 'Cliquez sur "Tirer une quête"')
-    ),
-
-    attemptResult && React.createElement("div", { className: `bg-gradient-to-r ${attemptResult.success ? 'from-green-600 to-green-800' : 'from-red-600 to-red-800'} rounded-xl p-6 text-white` },
-      React.createElement("div", { className: "text-center mb-4" },
-        React.createElement("div", { className: "text-2xl font-bold" }, attemptResult.success ? "✅ SUCCÈS" : "❌ ÉCHEC"),
-        React.createElement("div", { className: "text-4xl font-bold mt-2" }, `${attemptResult.total} vs ${attemptResult.difficulty}`)
+  if (mode === 'stat') {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("h3", { className: "text-xl font-bold text-center" }, "🔮 Choisir statistique"),
+      React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+        Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("button", { key: k, onClick: () => chooseStat(k, n), className: "py-3 bg-purple-600 text-white rounded-lg font-semibold" }, n))
       ),
-      React.createElement("div", { className: "bg-white bg-opacity-20 rounded-lg p-3 text-sm" },
-        React.createElement("p", null, `Dé: ${attemptResult.diceRoll}`),
-        React.createElement("p", null, `Base: ${attemptResult.baseStat >= 0 ? '+' : ''}${attemptResult.baseStat}`),
-        React.createElement("p", null, `États: ${attemptResult.effectsBonus >= 0 ? '+' : ''}${attemptResult.effectsBonus}`),
-        attemptResult.questBonus > 0 && React.createElement("p", null, `Bonus quête: +${attemptResult.questBonus}`)
+      React.createElement("button", { onClick: reset, className: "w-full py-2 bg-gray-600 text-white rounded-lg" }, "Annuler")
+    );
+  }
+
+  if (mode === 'sacrifice') {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("h3", { className: "text-xl font-bold text-center" }, "🩸 Sacrifice"),
+      React.createElement("div", { className: "flex items-center justify-center gap-4" },
+        React.createElement("button", { onClick: () => setSacrifice(Math.max(0, sacrifice - 1)), className: "w-12 h-12 bg-red-600 text-white rounded-full font-bold" }, "-"),
+        React.createElement("span", { className: "text-5xl font-bold text-red-600" }, sacrifice),
+        React.createElement("button", { onClick: () => setSacrifice(Math.min(player.pvCurrent - 1, sacrifice + 1)), className: "w-12 h-12 bg-red-600 text-white rounded-full font-bold" }, "+")
+      ),
+      React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+        React.createElement("button", { onClick: reset, className: "py-3 bg-gray-600 text-white rounded-lg" }, "Annuler"),
+        React.createElement("button", { onClick: () => execute(target, stat?.key, stat?.name, sacrifice), className: "py-3 bg-red-600 text-white rounded-lg font-bold" }, "Confirmer")
       )
-    ),
+    );
+  }
 
-    pendingQuest && React.createElement("div", { className: "bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-800 mb-3" }, "⚠️ Limite de quêtes (2 max)"),
-      React.createElement("p", { className: "text-sm text-gray-700 mb-3" }, pendingQuest.text),
-      React.createElement("div", { className: "space-y-2 mb-3" },
-        (player.quests || []).map(q => React.createElement("button", {
-          key: q.id, onClick: () => handleQuestChoice('replace', q.id),
-          className: "w-full text-left p-2 bg-white border rounded-lg hover:border-red-500 text-xs"
-        }, `Remplacer: ${q.text}`))
+  if (mode === 'confirm') {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("h3", { className: "text-xl font-bold text-center" }, `⚔️ Attaquer ${target.playerName}?`),
+      React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+        React.createElement("button", { onClick: reset, className: "py-3 bg-gray-600 text-white rounded-lg" }, "Annuler"),
+        React.createElement("button", { onClick: () => execute(target, stat?.key, stat?.name, sacrifice), className: "py-3 bg-red-600 text-white rounded-lg font-bold" }, "Attaquer")
+      )
+    );
+  }
+
+  if (rolling) {
+    return React.createElement("div", { className: "min-h-[200px] bg-gradient-to-r from-red-600 to-red-800 rounded-xl flex items-center justify-center" },
+      React.createElement("p", { className: "text-white text-xl animate-pulse" }, "⚔️ Combat...")
+    );
+  }
+
+  if (mode === 'result' && result) {
+    return React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: `p-6 rounded-xl text-white text-center ${result.draw ? 'bg-gray-600' : result.win ? 'bg-green-600' : 'bg-orange-600'}` },
+        React.createElement("div", { className: "text-2xl font-bold" }, result.draw ? "🤝 ÉGALITÉ" : result.win ? "✅ VICTOIRE" : "🛡️ ÉCHEC"),
+        React.createElement("div", { className: "text-lg mt-2" }, `${result.att.total} vs ${result.def.total}`),
+        result.win && result.damage && React.createElement("div", { className: "mt-2" }, `💥 ${result.damage} dégâts`),
+        result.died && React.createElement("div", { className: "text-yellow-300 mt-2" }, `💀 Kill ! +${result.pdv} PDV`),
+        result.counter && React.createElement("div", { className: "mt-2" }, `💢 -${result.counter} PV riposte`)
       ),
-      React.createElement("button", { onClick: () => handleQuestChoice('refuse'), className: "w-full py-2 bg-gray-600 text-white rounded-lg font-semibold" }, "Refuser")
-    ),
+      React.createElement("button", { onClick: reset, className: "w-full py-3 bg-gray-600 text-white rounded-xl" }, "Fermer")
+    );
+  }
 
-    React.createElement("div", { className: "grid grid-cols-2 gap-4" },
-      React.createElement("button", { onClick: drawCard, disabled: !isMyTurn || isAnimating || pendingQuest, className: `py-4 rounded-xl font-semibold ${isMyTurn && !pendingQuest ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-300 text-gray-500'}` }, "Tirer une quête"),
-      React.createElement("button", { onClick: resetDeck, className: "py-4 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700" }, "Réinitialiser")
-    ),
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center" }, "⚔️ Combat Joueur"),
+    player.usedAttackDice && React.createElement("div", { className: "p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center" }, React.createElement("p", { className: "text-yellow-800" }, "⚠️ Jet utilisé")),
+    React.createElement("button", { onClick: start, disabled: player.usedAttackDice || opponents.length === 0 || !isMyTurn, className: `w-full py-4 rounded-xl font-bold text-lg ${!player.usedAttackDice && isMyTurn ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "⚔️ Attaquer")
+  );
+}
 
-    React.createElement("div", null,
-      React.createElement("h4", { className: "text-lg font-bold text-gray-800 mb-3" }, `Mes quêtes (${(player.quests || []).length}/2)`),
-      (player.quests || []).length === 0 ? React.createElement("p", { className: "text-gray-500 text-center py-4" }, "Aucune quête") :
-      React.createElement("div", { className: "space-y-2" },
-        (player.quests || []).map(quest => {
-          const info = parseQuest(quest.text);
-          const hasRes = info.isExchange ? player[info.resourceKey] >= info.resourceAmount : true;
-          return React.createElement("div", { key: quest.id, className: `rounded-lg p-3 border-2 ${info.isExchange && !hasRes ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-300'}` },
-            React.createElement("p", { className: "text-sm text-gray-700 mb-2" }, quest.text),
-            info.isCombat && React.createElement("div", { className: "flex items-center justify-between" },
-              React.createElement("span", { className: "text-xs text-blue-600" }, `Difficulté ${info.difficulty} en ${info.statName}`),
-              React.createElement("button", { onClick: () => attemptQuest(quest.id, quest.text), disabled: !isMyTurn || player.usedAttackDice, className: `px-4 py-2 rounded-lg font-semibold text-sm ${isMyTurn && !player.usedAttackDice ? 'bg-orange-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "⚔️ Tenter")
+// ============= OBJECTIF TAB =============
+function ObjectifTab({ gameState, player, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory }) {
+  const completedIds = ensureArray(gameState.completedObjectives);
+  const available = OBJECTIVES.filter(o => !completedIds.includes(o.id));
+
+  const complete = async (obj) => {
+    if (!isMyTurn) return;
+    if ((player[obj.resource] || 0) < obj.amount) { alert("Ressources insuffisantes !"); return; }
+    await updatePlayer(playerIndex, { [obj.resource]: player[obj.resource] - obj.amount });
+    await updateGame({ completedObjectives: [...completedIds, obj.id] });
+    await addPdvWithHistory(playerIndex, obj.pdv, 'BONUS', { objective: obj.label });
+  };
+
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center text-gray-800" }, "🎯 Objectifs"),
+    React.createElement("div", { className: "space-y-3" },
+      available.map(o => {
+        const hasEnough = (player[o.resource] || 0) >= o.amount;
+        return React.createElement("div", { key: o.id, className: `p-4 rounded-xl border-2 ${hasEnough ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-gray-50'}` },
+          React.createElement("div", { className: "flex justify-between items-center" },
+            React.createElement("div", null,
+              React.createElement("span", { className: "text-2xl mr-2" }, o.emoji),
+              React.createElement("span", { className: "font-bold" }, o.label),
+              React.createElement("span", { className: "text-purple-600 ml-2" }, `+${o.pdv} PDV`)
             ),
-            info.isExchange && React.createElement("div", { className: "flex items-center justify-between" },
-              React.createElement("span", { className: `text-xs ${hasRes ? 'text-green-600' : 'text-red-600'}` }, `${player[info.resourceKey]}/${info.resourceAmount} ${info.resourceDisplayName}`),
-              React.createElement("button", { onClick: () => completeExchangeQuest(quest.id, quest.text), disabled: !isMyTurn || !hasRes, className: `px-4 py-2 rounded-lg font-semibold text-sm ${isMyTurn && hasRes ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "✓ Valider")
-            )
-          );
+            React.createElement("button", { onClick: () => complete(o), disabled: !hasEnough || !isMyTurn, className: `px-4 py-2 rounded-lg font-semibold ${hasEnough && isMyTurn ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "Valider")
+          ),
+          React.createElement("div", { className: "text-sm text-gray-600 mt-1" }, `Vous avez: ${player[o.resource] || 0}`)
+        );
+      })
+    ),
+    completedIds.length > 0 && React.createElement("div", { className: "mt-6" },
+      React.createElement("h4", { className: "font-bold text-gray-600 mb-2" }, "✅ Complétés"),
+      React.createElement("div", { className: "flex flex-wrap gap-2" },
+        completedIds.map(id => {
+          const obj = OBJECTIVES.find(o => o.id === id);
+          return obj && React.createElement("span", { key: id, className: "px-3 py-1 bg-gray-200 rounded-full text-sm" }, `${obj.emoji} ${obj.label}`);
         })
       )
     )
   );
 }
 
-// ============= STATISTIQUE TAB =============
-function StatistiqueTab() {
-  const [currentStat, setCurrentStat] = useState(null);
-  const [isAnimating, setIsAnimating] = useState(false);
+// ============= ECHANGE TAB =============
+function EchangeTab({ player, playerIndex, isMyTurn, updatePlayer }) {
+  const rates = { or_cuivre: { from: 'or', to: 'cuivre', cost: 3, get: 1 }, or_argent: { from: 'or', to: 'argent', cost: 6, get: 1 }, or_obsidienne: { from: 'or', to: 'obsidienne', cost: 12, get: 1 }, cuivre_or: { from: 'cuivre', to: 'or', cost: 1, get: 2 }, argent_or: { from: 'argent', to: 'or', cost: 1, get: 4 }, obsidienne_or: { from: 'obsidienne', to: 'or', cost: 1, get: 8 } };
+  const labels = { or: '💰 Or', cuivre: '🥉 Cuivre', argent: '🥈 Argent', obsidienne: '⬛ Obsidienne' };
 
-  const drawStat = () => {
-    setIsAnimating(true);
-    setTimeout(() => {
-      setCurrentStat(STATISTIQUES[Math.floor(Math.random() * STATISTIQUES.length)]);
-      setIsAnimating(false);
-    }, 300);
+  const exchange = async (key) => {
+    const r = rates[key];
+    if ((player[r.from] || 0) < r.cost) return;
+    await updatePlayer(playerIndex, { [r.from]: player[r.from] - r.cost, [r.to]: (player[r.to] || 0) + r.get });
   };
 
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "📊 Statistique aléatoire"),
-    React.createElement("div", { className: `min-h-[180px] bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-6 flex items-center justify-center transition-all ${isAnimating ? 'scale-95 opacity-50' : ''}` },
-      currentStat ? React.createElement("p", { className: "text-4xl text-center text-white font-bold" }, currentStat) : React.createElement("p", { className: "text-gray-300 text-center italic" }, 'Cliquez pour tirer')
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center text-gray-800" }, "🔄 Échange"),
+    React.createElement("div", { className: "bg-purple-50 rounded-xl p-4 mb-4" },
+      React.createElement("div", { className: "grid grid-cols-4 gap-2 text-center" },
+        Object.entries(labels).map(([k, l]) => React.createElement("div", { key: k },
+          React.createElement("div", { className: "text-2xl" }, l.split(' ')[0]),
+          React.createElement("div", { className: "font-bold text-lg" }, player[k] || 0)
+        ))
+      )
     ),
-    React.createElement("button", { onClick: drawStat, disabled: isAnimating, className: "w-full py-4 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700" }, "Tirer une statistique")
+    React.createElement("div", { className: "space-y-2" },
+      Object.entries(rates).map(([k, r]) => {
+        const canDo = (player[r.from] || 0) >= r.cost;
+        return React.createElement("button", { key: k, onClick: () => exchange(k), disabled: !canDo || !isMyTurn, className: `w-full p-3 rounded-lg flex justify-between items-center ${canDo && isMyTurn ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}` },
+          React.createElement("span", null, `${r.cost} ${labels[r.from]}`),
+          React.createElement("span", null, "→"),
+          React.createElement("span", null, `${r.get} ${labels[r.to]}`)
+        );
+      })
+    )
   );
 }
 
-// ============= DE TAB =============
-function DeTab({ player, gameState, players, updatePlayer, playerIndex, isMyTurn }) {
-  const [moveResult, setMoveResult] = useState(null);
-  const [attackResult, setAttackResult] = useState(null);
-  const [combatMode, setCombatMode] = useState(null);
-  const [selectedOpponent, setSelectedOpponent] = useState(null);
-  const [combatResult, setCombatResult] = useState(null);
-  const [isAnimating, setIsAnimating] = useState(false);
+// ============= PARI TAB =============
+function PariTab({ gameState, player, playerIndex, isMyTurn, updatePlayer, updateGame, players }) {
+  const [betAmount, setBetAmount] = useState(1);
+  const [targetPlayer, setTargetPlayer] = useState(null);
+  const [prediction, setPrediction] = useState('win');
 
-  // Use players prop or fallback
-  const allPlayers = players || (Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null));
+  const allPlayers = ensureArray(players);
+  const others = allPlayers.filter((p, i) => p && i !== playerIndex);
+  const currentBets = ensureArray(gameState.activeBets);
+  const myBet = currentBets.find(b => b && b.odId === player.odId);
 
-  const rollMove = () => {
-    setIsAnimating(true);
-    setTimeout(() => {
-      setMoveResult(Math.floor(Math.random() * 10));
-      setIsAnimating(false);
-    }, 800);
+  const placeBet = async () => {
+    if (!targetPlayer || betAmount <= 0 || betAmount > player.or) return;
+    const newBet = { id: `bet_${Date.now()}`, odId: player.odId, betterName: player.playerName, targetId: targetPlayer.id, targetName: targetPlayer.playerName, amount: betAmount, prediction, resolved: false };
+    await updatePlayer(playerIndex, { or: player.or - betAmount });
+    await updateGame({ activeBets: [...currentBets, newBet] });
   };
 
-  const rollAttack = async () => {
-    if (!isMyTurn || player.usedAttackDice) { alert("Jet d'attaque déjà utilisé !"); return; }
-    setIsAnimating(true);
-
-    setTimeout(async () => {
-      const statIdx = Math.floor(Math.random() * STATISTIQUES.length);
-      const stat = STATISTIQUES[statIdx];
-      const statKey = STAT_MAPPING[stat];
-      const diceRoll = Math.floor(Math.random() * 10);
-      const baseStat = (player.baseStats && player.baseStats[statKey]) || 0;
-      const effectsBonus = (player.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
-      const total = diceRoll + baseStat + effectsBonus;
-
-      setAttackResult({ stat, statKey, diceRoll, baseStat, effectsBonus, total });
-      await updatePlayer(playerIndex, { usedAttackDice: true });
-      setIsAnimating(false);
-    }, 800);
+  const resolveBet = async (bet, won) => {
+    const betterIdx = allPlayers.findIndex(p => p && p.odId === bet.odId);
+    if (betterIdx < 0) return;
+    const winnings = won ? bet.amount * 2 : 0;
+    if (winnings > 0) await db.ref(`games/${gameState.code}/players/${betterIdx}`).update({ or: (allPlayers[betterIdx].or || 0) + winnings });
+    const newBets = currentBets.filter(b => b.id !== bet.id);
+    await updateGame({ activeBets: newBets });
   };
 
-  const startCombat = () => {
-    if (!isMyTurn || player.usedAttackDice) { alert("Jet d'attaque déjà utilisé !"); return; }
-    setCombatMode('select');
-  };
-
-  const executeCombat = async (oppIdx, statKey, statName) => {
-    setIsAnimating(true);
-    const opponent = allPlayers[oppIdx];
-    if (!opponent) { setIsAnimating(false); return; }
-
-    setTimeout(async () => {
-      const atkDice = Math.floor(Math.random() * 10);
-      const defDice = Math.floor(Math.random() * 10);
-      const atkBase = (player.baseStats && player.baseStats[statKey]) || 0;
-      const atkEff = (player.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
-      const defBase = (opponent.baseStats && opponent.baseStats[statKey]) || 0;
-      const defEff = (opponent.effects || []).filter(e => e.stat === statKey).reduce((s, e) => s + e.delta, 0);
-      const atkTotal = atkDice + atkBase + atkEff;
-      const defTotal = defDice + defBase + defEff;
-      const diff = atkTotal - defTotal;
-
-      const result = { stat: statName, atkDice, defDice, atkBase, atkEff, defBase, defEff, atkTotal, defTotal, diff, opponentName: opponent.playerName };
-
-      const updates = { usedAttackDice: true };
-      const oppUpdates = {};
-
-      if (diff > 0) {
-        result.winner = 'attacker';
-        oppUpdates.pvCurrent = Math.max(0, opponent.pvCurrent - diff);
-        const heal = rulesEngine.getHealOnWin(player);
-        if (heal > 0) updates.pvCurrent = Math.min(player.character.pvMax, player.pvCurrent + heal);
-        if (opponent.pvCurrent - diff <= 0) {
-          result.killed = true;
-          const pdvGain = 1 + rulesEngine.getCursedKillBonus(player, opponent);
-          updates.pdv = player.pdv + pdvGain;
-          updates.pdvHistory = [...(player.pdvHistory || []), { id: `pdv_${Date.now()}`, amount: pdvGain, source: 'COMBAT' }];
-        }
-      } else if (diff < 0) {
-        result.winner = 'defender';
-        const counter = rulesEngine.getCounterDamage(opponent);
-        if (counter > 0) updates.pvCurrent = Math.max(0, player.pvCurrent - counter);
-      } else {
-        result.winner = 'draw';
-      }
-
-      setCombatResult(result);
-      await updatePlayer(playerIndex, updates);
-      if (Object.keys(oppUpdates).length > 0) await updatePlayer(oppIdx, oppUpdates);
-      setIsAnimating(false);
-      setCombatMode(null);
-      setSelectedOpponent(null);
-    }, 1000);
-  };
-
-  const opponents = allPlayers.filter((p, i) => p && i !== playerIndex);
-
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "🎲 Lancers de dés"),
-
-    React.createElement("div", { className: "grid grid-cols-2 gap-4" },
-      React.createElement("div", { className: "bg-blue-50 rounded-xl p-4" },
-        React.createElement("h4", { className: "font-bold text-blue-800 mb-3 text-center" }, "Déplacement"),
-        React.createElement("div", { className: `h-24 bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl flex items-center justify-center mb-3 ${isAnimating ? 'animate-pulse' : ''}` },
-          moveResult !== null ? React.createElement("span", { className: "text-5xl font-bold text-white" }, moveResult) : React.createElement("span", { className: "text-gray-300" }, "—")
-        ),
-        React.createElement("button", { onClick: rollMove, disabled: isAnimating, className: "w-full py-3 bg-blue-600 text-white rounded-lg font-semibold" }, "Lancer")
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center text-gray-800" }, "🎰 Paris"),
+    !myBet && React.createElement("div", { className: "bg-yellow-50 rounded-xl p-4 space-y-3" },
+      React.createElement("h4", { className: "font-bold" }, "Nouveau Pari"),
+      React.createElement("select", { value: targetPlayer?.id || '', onChange: e => setTargetPlayer(others.find(p => p.id === e.target.value)), className: "w-full p-2 border rounded-lg" },
+        React.createElement("option", { value: "" }, "Choisir joueur..."),
+        others.map(p => React.createElement("option", { key: p.id, value: p.id }, p.playerName))
       ),
-
-      React.createElement("div", { className: "bg-red-50 rounded-xl p-4" },
-        React.createElement("h4", { className: "font-bold text-red-800 mb-3 text-center" }, "Attaque"),
-        React.createElement("div", { className: `h-24 bg-gradient-to-r from-red-600 to-red-800 rounded-xl flex items-center justify-center mb-3 ${isAnimating ? 'animate-pulse' : ''}` },
-          attackResult ? React.createElement("div", { className: "text-center text-white" },
-            React.createElement("div", { className: "text-4xl font-bold" }, attackResult.total),
-            React.createElement("div", { className: "text-xs" }, attackResult.stat)
-          ) : React.createElement("span", { className: "text-gray-300" }, "—")
-        ),
-        React.createElement("button", { onClick: rollAttack, disabled: !isMyTurn || player.usedAttackDice || isAnimating, className: `w-full py-3 rounded-lg font-semibold ${isMyTurn && !player.usedAttackDice ? 'bg-red-600 text-white' : 'bg-gray-300 text-gray-500'}` }, player.usedAttackDice ? "Utilisé" : "Lancer")
-      )
-    ),
-
-    attackResult && React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-gray-800 mb-2" }, "Détails du jet d'attaque"),
-      React.createElement("div", { className: "grid grid-cols-3 gap-2 text-center text-sm" },
-        React.createElement("div", null, React.createElement("p", { className: "text-gray-500" }, "Dé"), React.createElement("p", { className: "font-bold" }, attackResult.diceRoll)),
-        React.createElement("div", null, React.createElement("p", { className: "text-gray-500" }, "Base"), React.createElement("p", { className: "font-bold" }, attackResult.baseStat >= 0 ? `+${attackResult.baseStat}` : attackResult.baseStat)),
-        React.createElement("div", null, React.createElement("p", { className: "text-gray-500" }, "États"), React.createElement("p", { className: "font-bold" }, attackResult.effectsBonus >= 0 ? `+${attackResult.effectsBonus}` : attackResult.effectsBonus))
-      )
-    ),
-
-    React.createElement("div", { className: "bg-orange-50 rounded-xl p-4" },
-      React.createElement("h4", { className: "font-bold text-orange-800 mb-3" }, "⚔️ Combat joueur"),
-      combatMode === 'select' ? React.createElement("div", { className: "space-y-2" },
-        React.createElement("p", { className: "text-sm text-gray-600 mb-2" }, "Choisissez un adversaire :"),
-        opponents.map((opp, i) => React.createElement("button", {
-          key: opp.id, onClick: () => { setSelectedOpponent(allPlayers.indexOf(opp)); setCombatMode('stat'); },
-          className: "w-full p-3 bg-white border-2 border-orange-300 rounded-lg text-left hover:border-orange-500"
-        },
-          React.createElement("span", { className: "font-bold" }, opp.playerName),
-          React.createElement("span", { className: "text-sm text-gray-500 ml-2" }, `(${opp.character.name} - ${opp.pvCurrent} PV)`)
-        )),
-        React.createElement("button", { onClick: () => setCombatMode(null), className: "w-full py-2 bg-gray-200 rounded-lg mt-2" }, "Annuler")
-      ) : combatMode === 'stat' && rulesEngine.canChooseStat(player) ? React.createElement("div", { className: "space-y-2" },
-        React.createElement("p", { className: "text-sm text-gray-600 mb-2" }, "Choisissez la statistique (Hérétique) :"),
-        Object.entries(STAT_NAMES).map(([key, name]) => React.createElement("button", {
-          key, onClick: () => executeCombat(selectedOpponent, key, name),
-          className: "w-full p-2 bg-white border rounded-lg hover:bg-purple-50"
-        }, name)),
-        React.createElement("button", { onClick: () => setCombatMode('select'), className: "w-full py-2 bg-gray-200 rounded-lg mt-2" }, "Retour")
-      ) : combatMode === 'stat' ? (() => {
-        const stat = STATISTIQUES[Math.floor(Math.random() * STATISTIQUES.length)];
-        const statKey = STAT_MAPPING[stat];
-        setTimeout(() => executeCombat(selectedOpponent, statKey, stat), 100);
-        return React.createElement("p", { className: "text-center text-gray-600" }, "Tirage de la stat...");
-      })() : React.createElement("button", { onClick: startCombat, disabled: !isMyTurn || player.usedAttackDice, className: `w-full py-3 rounded-lg font-semibold ${isMyTurn && !player.usedAttackDice ? 'bg-orange-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "Lancer un combat")
-    ),
-
-    combatResult && React.createElement("div", { className: `rounded-xl p-4 ${combatResult.winner === 'attacker' ? 'bg-green-100' : combatResult.winner === 'defender' ? 'bg-red-100' : 'bg-yellow-100'}` },
-      React.createElement("h4", { className: "font-bold text-gray-800 mb-2" }, `Combat vs ${combatResult.opponentName}`),
-      React.createElement("div", { className: "grid grid-cols-2 gap-4 text-center" },
-        React.createElement("div", null, React.createElement("p", { className: "text-sm text-gray-500" }, "Vous"), React.createElement("p", { className: "text-3xl font-bold" }, combatResult.atkTotal)),
-        React.createElement("div", null, React.createElement("p", { className: "text-sm text-gray-500" }, "Adversaire"), React.createElement("p", { className: "text-3xl font-bold" }, combatResult.defTotal))
+      React.createElement("div", { className: "flex gap-2" },
+        React.createElement("button", { onClick: () => setPrediction('win'), className: `flex-1 py-2 rounded-lg font-semibold ${prediction === 'win' ? 'bg-green-600 text-white' : 'bg-gray-200'}` }, "✅ Victoire"),
+        React.createElement("button", { onClick: () => setPrediction('lose'), className: `flex-1 py-2 rounded-lg font-semibold ${prediction === 'lose' ? 'bg-red-600 text-white' : 'bg-gray-200'}` }, "❌ Défaite")
       ),
-      React.createElement("p", { className: `text-center font-bold mt-3 ${combatResult.winner === 'attacker' ? 'text-green-600' : combatResult.winner === 'defender' ? 'text-red-600' : 'text-yellow-600'}` },
-        combatResult.winner === 'attacker' ? `✅ Victoire ! ${Math.abs(combatResult.diff)} dégâts infligés${combatResult.killed ? ' - KILL !' : ''}` : combatResult.winner === 'defender' ? '❌ Défaite !' : '🤝 Égalité !'
+      React.createElement("div", { className: "flex items-center gap-3" },
+        React.createElement("span", null, "Mise:"),
+        React.createElement("button", { onClick: () => setBetAmount(Math.max(1, betAmount - 1)), className: "w-10 h-10 bg-gray-300 rounded-full" }, "-"),
+        React.createElement("span", { className: "text-2xl font-bold" }, betAmount),
+        React.createElement("button", { onClick: () => setBetAmount(Math.min(player.or, betAmount + 1)), className: "w-10 h-10 bg-gray-300 rounded-full" }, "+"),
+        React.createElement("span", { className: "text-gray-500" }, `(max: ${player.or})`)
+      ),
+      React.createElement("button", { onClick: placeBet, disabled: !targetPlayer || !isMyTurn, className: `w-full py-3 rounded-xl font-bold ${targetPlayer && isMyTurn ? 'bg-yellow-500 text-white' : 'bg-gray-300'}` }, "Parier")
+    ),
+    myBet && React.createElement("div", { className: "bg-yellow-100 rounded-xl p-4" },
+      React.createElement("p", { className: "font-bold" }, "Votre pari actif:"),
+      React.createElement("p", null, `${myBet.amount} Or sur ${myBet.prediction === 'win' ? 'victoire' : 'défaite'} de ${myBet.targetName}`)
+    ),
+    currentBets.length > 0 && React.createElement("div", null,
+      React.createElement("h4", { className: "font-bold text-gray-700 mb-2" }, "Paris en cours"),
+      React.createElement("div", { className: "space-y-2" },
+        currentBets.filter(b => !b.resolved).map(b => React.createElement("div", { key: b.id, className: "p-3 bg-gray-100 rounded-lg flex justify-between items-center" },
+          React.createElement("div", null,
+            React.createElement("span", { className: "font-semibold" }, b.betterName),
+            React.createElement("span", { className: "text-gray-600" }, ` parie ${b.amount} Or: ${b.targetName} ${b.prediction === 'win' ? 'gagne' : 'perd'}`)
+          ),
+          isMyTurn && React.createElement("div", { className: "flex gap-1" },
+            React.createElement("button", { onClick: () => resolveBet(b, true), className: "px-2 py-1 bg-green-500 text-white rounded text-sm" }, "✓"),
+            React.createElement("button", { onClick: () => resolveBet(b, false), className: "px-2 py-1 bg-red-500 text-white rounded text-sm" }, "✗")
+          )
+        ))
+      )
+    )
+  );
+}
+
+// ============= EVENT TAB =============
+function EventTab({ gameState, updateGame, isMyTurn }) {
+  const [customBonus, setCustomBonus] = useState(0);
+  const activeEvents = ensureArray(gameState.activeEvents);
+
+  const triggerEvent = async () => {
+    if (!isMyTurn) return;
+    const eventText = MAJOR_EVENTS[Math.floor(Math.random() * MAJOR_EVENTS.length)];
+    const newEvent = { id: `evt_${Date.now()}`, text: eventText, timestamp: Date.now() };
+    await updateGame({ activeEvents: [...activeEvents, newEvent] });
+  };
+
+  const setBonus = async () => {
+    await updateGame({ eventBonus: customBonus });
+  };
+
+  const clearEvents = async () => {
+    await updateGame({ activeEvents: [] });
+  };
+
+  return React.createElement("div", { className: "space-y-4" },
+    React.createElement("h3", { className: "text-xl font-bold text-center text-gray-800" }, "🎭 Événements"),
+    React.createElement("div", { className: "bg-purple-50 rounded-xl p-4" },
+      React.createElement("h4", { className: "font-bold mb-2" }, "Bonus de tour actuel"),
+      React.createElement("div", { className: "flex items-center justify-center gap-4" },
+        React.createElement("button", { onClick: () => setCustomBonus(Math.max(-5, customBonus - 1)), className: "w-12 h-12 bg-red-500 text-white rounded-full font-bold" }, "-"),
+        React.createElement("span", { className: "text-4xl font-bold" }, gameState.eventBonus || 0),
+        React.createElement("button", { onClick: () => setCustomBonus(Math.min(10, customBonus + 1)), className: "w-12 h-12 bg-green-500 text-white rounded-full font-bold" }, "+")
+      ),
+      React.createElement("button", { onClick: setBonus, disabled: !isMyTurn, className: `w-full mt-3 py-2 rounded-lg font-semibold ${isMyTurn ? 'bg-purple-600 text-white' : 'bg-gray-300'}` }, `Définir bonus: ${customBonus >= 0 ? '+' : ''}${customBonus}`)
+    ),
+    React.createElement("button", { onClick: triggerEvent, disabled: !isMyTurn, className: `w-full py-4 rounded-xl font-bold text-lg ${isMyTurn ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white' : 'bg-gray-300'}` }, "🎲 Déclencher un Événement"),
+    activeEvents.length > 0 && React.createElement("div", null,
+      React.createElement("div", { className: "flex justify-between items-center mb-2" },
+        React.createElement("h4", { className: "font-bold text-gray-700" }, "Historique"),
+        React.createElement("button", { onClick: clearEvents, className: "text-red-500 text-sm" }, "Effacer")
+      ),
+      React.createElement("div", { className: "space-y-2 max-h-60 overflow-auto" },
+        [...activeEvents].reverse().map(e => React.createElement("div", { key: e.id, className: "p-3 bg-yellow-50 border border-yellow-200 rounded-lg" },
+          React.createElement("p", null, e.text)
+        ))
       )
     )
   );
 }
 
 // ============= PERSONNAGE TAB =============
-function PersonnageTab({ player, updatePlayer, gameState, players, updateGame, playerIndex, onPassStart, isMyTurn }) {
-  const [subTab, setSubTab] = useState('global');
-  const [newEffect, setNewEffect] = useState({ type: 'BLESS', stat: 'endurance' });
-  const [showTargetSelect, setShowTargetSelect] = useState(null);
-  const [selectedStat, setSelectedStat] = useState('endurance');
-
-  // Use players prop or fallback
-  const allPlayers = players || (Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null));
-
-  const adjustPv = (d) => isMyTurn && updatePlayer({ pvCurrent: Math.max(0, Math.min(player.character.pvMax, player.pvCurrent + d)) });
-  const adjustResource = (key, d) => isMyTurn && updatePlayer({ [key]: Math.max(0, player[key] + d) });
+function PersonnageTab({ player, playerIndex, isMyTurn, updatePlayer }) {
+  const [subTab, setSubTab] = useState('stats');
+  const [newEffect, setNewEffect] = useState({ type: 'BLESS', stat: 'force' });
 
   const addEffect = async () => {
     if (!isMyTurn) return;
-    const effect = { id: `eff_${Date.now()}`, type: newEffect.type, stat: newEffect.stat, name: newEffect.type === 'BLESS' ? 'Bénédiction' : 'Malédiction', delta: newEffect.type === 'BLESS' ? 2 : -2 };
-    await updatePlayer({ effects: [...(player.effects || []), effect] });
+    const effect = { id: `eff_${Date.now()}`, type: newEffect.type, name: newEffect.type === 'BLESS' ? 'Bénédiction' : 'Malédiction', stat: newEffect.stat, delta: newEffect.type === 'BLESS' ? 2 : -2 };
+    await updatePlayer(playerIndex, { effects: [...(player.effects || []), effect] });
   };
 
-  const removeEffect = async (id) => isMyTurn && updatePlayer({ effects: (player.effects || []).filter(e => e.id !== id) });
-
-  const applyEffectToTarget = async (targetIdx, effectType) => {
-    const target = allPlayers[targetIdx];
-    if (!target) return;
-    const effect = { id: `eff_${Date.now()}`, type: effectType === 'bless' ? 'BLESS' : 'CURSE', stat: selectedStat, name: effectType === 'bless' ? `Bénédiction (${player.character.name})` : `Malédiction (${player.character.name})`, delta: effectType === 'bless' ? 2 : -2 };
-    
-    const targetUpdates = { effects: [...(target.effects || []), effect] };
-    const myUpdates = effectType === 'bless' ? { blessAvailable: false } : { curseAvailable: false };
-    
-    await updateGame({ [`players/${targetIdx}/effects`]: targetUpdates.effects });
-    await updatePlayer(myUpdates);
-    setShowTargetSelect(null);
+  const removeEffect = async (effId) => {
+    if (!isMyTurn) return;
+    await updatePlayer(playerIndex, { effects: (player.effects || []).filter(e => e.id !== effId) });
   };
-
-  const effectiveStats = rulesEngine.computeEffectiveStats(player);
-  const territories = countTerritoriesByBiome(player.territories);
-
-  if (showTargetSelect) {
-    const isBless = showTargetSelect === 'bless';
-    return React.createElement("div", { className: "space-y-4" },
-      React.createElement("h3", { className: `text-xl font-bold text-center ${isBless ? 'text-green-700' : 'text-red-700'}` }, isBless ? "✨ Bénédiction" : "💀 Malédiction"),
-      React.createElement("select", { value: selectedStat, onChange: e => setSelectedStat(e.target.value), className: "w-full p-3 border-2 rounded-lg" },
-        Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("option", { key: k, value: k }, n))
-      ),
-      React.createElement("div", { className: "space-y-2" },
-        allPlayers.map((p, idx) => p && React.createElement("button", {
-          key: p.id || idx, onClick: () => applyEffectToTarget(idx, showTargetSelect),
-          className: `w-full p-4 rounded-xl border-2 text-left ${isBless ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`
-        }, React.createElement("span", { className: "font-bold" }, `${p.playerName} - ${p.character?.name || 'Personnage'}`)))
-      ),
-      React.createElement("button", { onClick: () => setShowTargetSelect(null), className: "w-full py-3 bg-gray-600 text-white rounded-xl font-semibold" }, "Annuler")
-    );
-  }
-
-  const ResBox = ({ icon, label, val, k }) => React.createElement("div", { className: "bg-white bg-opacity-20 rounded-lg p-3" },
-    React.createElement("div", { className: "text-sm font-semibold mb-2 text-center" }, `${icon} ${label}`),
-    React.createElement("div", { className: "text-3xl font-bold text-center mb-2" }, val),
-    React.createElement("div", { className: "flex gap-2" },
-      React.createElement("button", { onClick: () => adjustResource(k, -1), className: "flex-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded py-2 font-semibold" }, "-1"),
-      React.createElement("button", { onClick: () => adjustResource(k, 1), className: "flex-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded py-2 font-semibold" }, "+1")
-    )
-  );
 
   return React.createElement("div", { className: "space-y-4" },
-    React.createElement("div", { className: "text-center" },
-      React.createElement("h2", { className: "text-3xl font-bold text-gray-800" }, player.character.name),
-      React.createElement("p", { className: "text-gray-600" }, player.playerName)
+    React.createElement("div", { className: "flex gap-2 mb-4" },
+      React.createElement("button", { onClick: () => setSubTab('stats'), className: `flex-1 py-2 rounded-lg font-semibold ${subTab === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-200'}` }, "📊 Stats"),
+      React.createElement("button", { onClick: () => setSubTab('skills'), className: `flex-1 py-2 rounded-lg font-semibold ${subTab === 'skills' ? 'bg-purple-600 text-white' : 'bg-gray-200'}` }, "⚔️ Compétences"),
+      React.createElement("button", { onClick: () => setSubTab('etat'), className: `flex-1 py-2 rounded-lg font-semibold ${subTab === 'etat' ? 'bg-pink-600 text-white' : 'bg-gray-200'}` }, "💫 États")
     ),
 
-    React.createElement("div", { className: "flex gap-1" },
-      ['global', 'stats', 'effets', 'skills'].map(tab => React.createElement("button", {
-        key: tab, onClick: () => setSubTab(tab),
-        className: `flex-1 py-2 rounded-lg font-semibold text-sm ${subTab === tab ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`
-      }, tab === 'global' ? '🎯 Global' : tab === 'stats' ? '📊 Stats' : tab === 'effets' ? '💫 États' : '⚔️ Skills'))
-    ),
-
-    subTab === 'global' && React.createElement("div", { className: "space-y-4" },
-      React.createElement("div", { className: "bg-gradient-to-r from-red-500 to-pink-500 rounded-2xl p-6 text-white" },
-        React.createElement("div", { className: "text-center mb-4" },
-          React.createElement("div", { className: "text-sm font-semibold mb-2" }, "Points de Vie"),
-          React.createElement("div", { className: "text-5xl font-bold" }, `${player.pvCurrent} / ${player.character.pvMax}`)
-        ),
-        React.createElement("div", { className: "flex gap-2" },
-          [-5, -1].map(d => React.createElement("button", { key: d, onClick: () => adjustPv(d), className: "flex-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg py-2 font-semibold" }, d)),
-          React.createElement("button", { onClick: () => isMyTurn && updatePlayer({ pvCurrent: player.character.pvMax }), className: "flex-1 bg-white text-red-600 rounded-lg py-2 font-semibold text-sm" }, "Max"),
-          [1, 5].map(d => React.createElement("button", { key: d, onClick: () => adjustPv(d), className: "flex-1 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg py-2 font-semibold" }, `+${d}`))
+    subTab === 'stats' && React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: "bg-gradient-to-r from-red-500 to-pink-500 rounded-xl p-4 text-white text-center" },
+        React.createElement("div", { className: "text-sm opacity-80" }, "Points de Vie"),
+        React.createElement("div", { className: "text-4xl font-bold" }, `${player.pvCurrent} / ${player.character?.pvMax}`),
+        React.createElement("div", { className: "w-full bg-white bg-opacity-30 rounded-full h-3 mt-2" },
+          React.createElement("div", { className: "bg-white h-3 rounded-full transition-all", style: { width: `${(player.pvCurrent / player.character?.pvMax) * 100}%` } })
         )
       ),
-
-      React.createElement("button", { onClick: onPassStart, disabled: !isMyTurn, className: `w-full py-4 rounded-xl font-bold text-lg ${isMyTurn ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white' : 'bg-gray-300 text-gray-500'}` }, "🏁 Passage par le Départ"),
-
-      React.createElement("div", { className: "bg-gradient-to-r from-amber-500 to-yellow-500 rounded-2xl p-6 text-white" },
-        React.createElement("h3", { className: "text-xl font-bold mb-4 text-center" }, "Ressources"),
-        React.createElement("div", { className: "grid grid-cols-2 gap-3" },
-          React.createElement(ResBox, { icon: "🪙", label: "Or", val: player.or, k: "or" }),
-          React.createElement(ResBox, { icon: "🌳", label: "Cuivre", val: player.cuivre, k: "cuivre" }),
-          React.createElement(ResBox, { icon: "🏜️", label: "Argent", val: player.argent, k: "argent" }),
-          React.createElement(ResBox, { icon: "⛰️", label: "Obsidienne", val: player.obsidienne, k: "obsidienne" }),
-          React.createElement(ResBox, { icon: "🏆", label: "PDV", val: player.pdv, k: "pdv" }),
-          React.createElement(ResBox, { icon: "🎲", label: "Tour", val: player.tourPlateau, k: "tourPlateau" })
-        )
+      React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+        Object.entries(STAT_NAMES).map(([k, n]) => {
+          const base = player.baseStats?.[k] || 0;
+          const bonus = (player.effects || []).filter(e => e.stat === k).reduce((s, e) => s + e.delta, 0);
+          return React.createElement("div", { key: k, className: "bg-gray-100 rounded-xl p-3 text-center" },
+            React.createElement("div", { className: "text-sm text-gray-600" }, n),
+            React.createElement("div", { className: "text-2xl font-bold" }, base),
+            bonus !== 0 && React.createElement("div", { className: `text-sm ${bonus > 0 ? 'text-green-600' : 'text-red-600'}` }, `${bonus > 0 ? '+' : ''}${bonus}`)
+          );
+        })
       ),
-
-      (player.territories || []).length > 0 && React.createElement("div", null,
-        React.createElement("h3", { className: "text-xl font-bold text-gray-800 mb-3" }, `🏰 Territoires (${player.territories.length})`),
-        React.createElement("div", { className: "flex gap-2 flex-wrap" },
-          (player.territories || []).map(t => React.createElement("div", { key: t.id, className: `px-4 py-2 rounded-lg bg-gradient-to-br ${BIOMES[t.biome].color} text-white font-bold` },
-            `${BIOMES[t.biome].emoji} ${BIOMES[t.biome].name.split(' ')[0]}`
-          ))
+      React.createElement("div", { className: "bg-yellow-50 rounded-xl p-4" },
+        React.createElement("h4", { className: "font-bold text-gray-800 mb-2" }, "📦 Ressources"),
+        React.createElement("div", { className: "grid grid-cols-4 gap-2 text-center" },
+          React.createElement("div", null, React.createElement("div", { className: "text-xl" }, "💰"), React.createElement("div", { className: "font-bold" }, player.or || 0)),
+          React.createElement("div", null, React.createElement("div", { className: "text-xl" }, "🥉"), React.createElement("div", { className: "font-bold" }, player.cuivre || 0)),
+          React.createElement("div", null, React.createElement("div", { className: "text-xl" }, "🥈"), React.createElement("div", { className: "font-bold" }, player.argent || 0)),
+          React.createElement("div", null, React.createElement("div", { className: "text-xl" }, "⬛"), React.createElement("div", { className: "font-bold" }, player.obsidienne || 0))
         )
       )
     ),
 
-    subTab === 'stats' && React.createElement("div", { className: "space-y-3" },
-      Object.entries(STAT_NAMES).map(([key, name]) => {
-        const base = (player.baseStats && player.baseStats[key]) || 0;
-        const bonus = (player.effects || []).filter(e => e.stat === key).reduce((s, e) => s + e.delta, 0);
-        const total = base + bonus;
-        return React.createElement("div", { key, className: "bg-gray-50 rounded-lg p-3 flex items-center justify-between" },
-          React.createElement("span", { className: "font-semibold text-gray-700" }, name),
-          React.createElement("div", { className: "flex items-center gap-3" },
-            React.createElement("span", { className: "text-sm text-gray-500" }, `Base: ${base >= 0 ? '+' : ''}${base}`),
-            bonus !== 0 && React.createElement("span", { className: `text-sm ${bonus > 0 ? 'text-green-600' : 'text-red-600'}` }, `États: ${bonus > 0 ? '+' : ''}${bonus}`),
-            React.createElement("span", { className: `font-bold text-lg ${total >= 0 ? 'text-green-600' : 'text-red-600'}` }, `= ${total > 0 ? '+' : ''}${total}`)
+    subTab === 'skills' && React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", { className: "bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-4 text-white" },
+        React.createElement("h3", { className: "text-xl font-bold" }, player.character?.name),
+        React.createElement("p", { className: "text-sm opacity-80" }, player.character?.role),
+        React.createElement("p", { className: "text-sm italic mt-2" }, player.character?.concept)
+      ),
+      React.createElement("div", { className: "space-y-3" },
+        (player.skills || []).map((skill, idx) => React.createElement("div", { key: skill.id || idx, className: "p-4 rounded-xl border-2 bg-blue-50 border-blue-300" },
+          React.createElement("div", { className: "flex items-start gap-3" },
+            React.createElement("div", { className: "text-2xl" }, idx === 0 ? '🔮' : idx === 1 ? '⚔️' : '🛡️'),
+            React.createElement("div", { className: "flex-1" },
+              React.createElement("div", { className: "font-bold text-gray-800" }, `Compétence ${idx + 1}`),
+              React.createElement("p", { className: "text-sm text-gray-600 mt-1" }, skill.description)
+            )
           )
-        );
-      })
+        ))
+      )
     ),
 
-    subTab === 'effets' && React.createElement("div", { className: "space-y-4" },
-      rulesEngine.canBless(player) && React.createElement("div", { className: `p-4 rounded-xl border-2 ${player.blessAvailable ? 'bg-green-50 border-green-400' : 'bg-gray-100 border-gray-300 opacity-60'}` },
-        React.createElement("div", { className: "flex justify-between items-center" },
-          React.createElement("div", null,
-            React.createElement("div", { className: "font-bold text-green-700" }, "✨ Bénédiction (Vicaire)"),
-            React.createElement("p", { className: "text-sm text-gray-600" }, "+2 à une stat d'un joueur")
-          ),
-          React.createElement("button", { onClick: () => player.blessAvailable && isMyTurn && setShowTargetSelect('bless'), disabled: !player.blessAvailable || !isMyTurn, className: `px-4 py-2 rounded-lg font-semibold ${player.blessAvailable && isMyTurn ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'}` }, player.blessAvailable ? 'Utiliser' : 'Utilisé')
-        )
-      ),
-
-      rulesEngine.canCurse(player) && React.createElement("div", { className: `p-4 rounded-xl border-2 ${player.curseAvailable ? 'bg-red-50 border-red-400' : 'bg-gray-100 border-gray-300 opacity-60'}` },
-        React.createElement("div", { className: "flex justify-between items-center" },
-          React.createElement("div", null,
-            React.createElement("div", { className: "font-bold text-red-700" }, "💀 Malédiction (Hérétique)"),
-            React.createElement("p", { className: "text-sm text-gray-600" }, "-2 à une stat d'un joueur")
-          ),
-          React.createElement("button", { onClick: () => player.curseAvailable && isMyTurn && setShowTargetSelect('curse'), disabled: !player.curseAvailable || !isMyTurn, className: `px-4 py-2 rounded-lg font-semibold ${player.curseAvailable && isMyTurn ? 'bg-red-600 text-white' : 'bg-gray-400 text-white'}` }, player.curseAvailable ? 'Utiliser' : 'Utilisé')
-        )
-      ),
-
+    subTab === 'etat' && React.createElement("div", { className: "space-y-4" },
       React.createElement("div", { className: "bg-purple-50 rounded-xl p-4" },
-        React.createElement("h4", { className: "font-bold text-gray-800 mb-3" }, `États actifs (${(player.effects || []).length})`),
-        (player.effects || []).length === 0 ? React.createElement("p", { className: "text-gray-500 text-center py-2" }, "Aucun état") :
+        React.createElement("h3", { className: "text-lg font-bold text-gray-800 mb-3" }, "💫 États Actifs"),
+        (player.effects || []).length === 0 ? React.createElement("p", { className: "text-gray-500 italic text-center py-4" }, "Aucun état actif") :
         React.createElement("div", { className: "space-y-2 mb-4" },
           (player.effects || []).map(e => React.createElement("div", { key: e.id, className: `flex justify-between items-center p-3 rounded-lg ${e.type === 'BLESS' ? 'bg-green-100 border border-green-400' : 'bg-red-100 border border-red-400'}` },
             React.createElement("div", null,
               React.createElement("span", { className: e.type === 'BLESS' ? 'text-green-700 font-bold' : 'text-red-700 font-bold' }, `${e.type === 'BLESS' ? '✨' : '💀'} ${e.name}`),
-              React.createElement("span", { className: "text-gray-600 ml-2 text-sm" }, `(${STAT_NAMES[e.stat]}: ${e.delta >= 0 ? '+' : ''}${e.delta})`)
+              React.createElement("span", { className: "text-gray-600 ml-2" }, `(${STAT_NAMES[e.stat]}: ${e.delta >= 0 ? '+' : ''}${e.delta})`)
             ),
-            React.createElement("button", { onClick: () => removeEffect(e.id), className: "px-3 py-1 bg-red-500 text-white rounded text-sm" }, "✕")
+            React.createElement("button", { onClick: () => removeEffect(e.id), disabled: !isMyTurn, className: "px-3 py-1 bg-red-500 text-white rounded text-sm" }, "✕")
           ))
         ),
-
         React.createElement("div", { className: "border-t border-purple-200 pt-4" },
-          React.createElement("h5", { className: "font-semibold text-gray-700 mb-2" }, "Ajouter un état"),
+          React.createElement("h4", { className: "font-semibold text-gray-700 mb-2" }, "Ajouter un état"),
           React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
             React.createElement("button", { onClick: () => setNewEffect({ ...newEffect, type: 'BLESS' }), className: `py-2 rounded-lg font-semibold ${newEffect.type === 'BLESS' ? 'bg-green-600 text-white' : 'bg-gray-200'}` }, "✨ Bénédiction"),
             React.createElement("button", { onClick: () => setNewEffect({ ...newEffect, type: 'CURSE' }), className: `py-2 rounded-lg font-semibold ${newEffect.type === 'CURSE' ? 'bg-red-600 text-white' : 'bg-gray-200'}` }, "💀 Malédiction")
@@ -1332,21 +1255,72 @@ function PersonnageTab({ player, updatePlayer, gameState, players, updateGame, p
           React.createElement("select", { value: newEffect.stat, onChange: e => setNewEffect({ ...newEffect, stat: e.target.value }), className: "w-full p-2 border rounded-lg mb-2" },
             Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("option", { key: k, value: k }, n))
           ),
-          React.createElement("button", { onClick: addEffect, disabled: !isMyTurn, className: `w-full py-2 rounded-lg font-semibold ${isMyTurn ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "Ajouter")
+          React.createElement("button", { onClick: addEffect, disabled: !isMyTurn, className: `w-full py-2 rounded-lg font-semibold ${isMyTurn ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-500'}` }, "Ajouter l'état")
+        )
+      )
+    )
+  );
+}
+
+// ============= PDV HISTORY TAB =============
+function PdvHistoryTab({ player, gameState, players }) {
+  const history = player.pdvHistory || [];
+  const totals = useMemo(() => {
+    const sums = {};
+    history.forEach(e => { sums[e.source] = (sums[e.source] || 0) + e.amount; });
+    return sums;
+  }, [history]);
+
+  const allPlayers = ensureArray(players);
+  const ranking = useMemo(() => [...allPlayers].filter(p => p).sort((a, b) => (b?.pdv || 0) - (a?.pdv || 0)), [allPlayers]);
+  const totalPdv = allPlayers.reduce((sum, p) => sum + (p?.pdv || 0), 0);
+  const targetPdv = gameState.playerCount * 10;
+
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("div", { className: "text-center" },
+      React.createElement("h3", { className: "text-2xl font-bold text-gray-800" }, "🏆 Points de Victoire"),
+      React.createElement("div", { className: "text-5xl font-bold text-amber-500" }, player.pdv),
+      React.createElement("div", { className: "bg-purple-100 rounded-lg p-3 mt-3" },
+        React.createElement("div", { className: "text-sm text-purple-700 font-bold" }, `Total: ${totalPdv} / ${targetPdv} PDV`),
+        React.createElement("div", { className: "w-full bg-purple-200 rounded-full h-3 mt-2" },
+          React.createElement("div", { className: "bg-purple-600 h-3 rounded-full transition-all", style: { width: `${Math.min(100, (totalPdv / targetPdv) * 100)}%` } })
         )
       )
     ),
-
-    subTab === 'skills' && React.createElement("div", { className: "space-y-4" },
-      React.createElement("div", { className: "bg-blue-50 rounded-xl p-4" },
-        React.createElement("p", { className: "text-sm text-gray-600 mb-2" }, React.createElement("strong", null, "Rôle: "), player.character.role),
-        React.createElement("p", { className: "text-sm text-gray-700 italic mb-4" }, player.character.concept),
-        React.createElement("div", { className: "space-y-2" },
-          (player.skills || []).map((skill, idx) => React.createElement("div", { key: skill.id, className: "bg-white rounded-lg p-3" },
-            React.createElement("p", { className: "text-sm text-gray-700" }, `${idx + 1}. ${skill.description}`)
-          ))
-        ),
-        React.createElement("p", { className: "text-xs text-gray-600 mt-4 italic" }, React.createElement("strong", null, "Style: "), player.character.style)
+    React.createElement("div", { className: "bg-gray-50 rounded-xl p-4" },
+      React.createElement("h4", { className: "font-bold text-gray-800 mb-3" }, "📊 Répartition"),
+      React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-3" },
+        Object.entries(PDV_SOURCES).map(([k, info]) => React.createElement("div", { key: k, className: "bg-white rounded-lg p-3 text-center shadow" },
+          React.createElement("div", { className: "text-2xl" }, info.emoji),
+          React.createElement("div", { className: `text-2xl font-bold ${info.color}` }, totals[k] || 0),
+          React.createElement("div", { className: "text-xs text-gray-500" }, info.label)
+        ))
+      )
+    ),
+    history.length > 0 && React.createElement("div", null,
+      React.createElement("h4", { className: "font-bold text-gray-800 mb-3" }, `📜 Historique (${history.length})`),
+      React.createElement("div", { className: "space-y-2 max-h-60 overflow-auto" },
+        [...history].reverse().map(e => {
+          const info = PDV_SOURCES[e.source] || PDV_SOURCES.BONUS;
+          return React.createElement("div", { key: e.id, className: "flex items-center gap-3 bg-gray-50 rounded-lg p-3" },
+            React.createElement("span", { className: "text-2xl" }, info.emoji),
+            React.createElement("div", { className: "flex-1" },
+              React.createElement("span", { className: `font-bold ${info.color}` }, `+${e.amount} PDV`),
+              React.createElement("span", { className: "text-gray-500 text-sm ml-2" }, info.label),
+              e.details && Object.keys(e.details).length > 0 && React.createElement("div", { className: "text-xs text-gray-400" }, Object.values(e.details).join(' • '))
+            )
+          );
+        })
+      )
+    ),
+    React.createElement("div", { className: "bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-4 text-white" },
+      React.createElement("h4", { className: "font-bold mb-3" }, "🏅 Classement"),
+      React.createElement("div", { className: "space-y-2" },
+        ranking.map((p, i) => React.createElement("div", { key: p?.id || i, className: `flex items-center gap-3 p-2 rounded-lg ${p?.id === player.id ? 'bg-white bg-opacity-20' : ''}` },
+          React.createElement("span", { className: `text-xl font-bold ${i === 0 ? 'text-yellow-300' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-400' : ''}` }, `#${i + 1}`),
+          React.createElement("span", { className: "flex-1" }, p?.playerName || 'Inconnu'),
+          React.createElement("span", { className: "text-xl font-bold" }, p?.pdv || 0)
+        ))
       )
     )
   );
