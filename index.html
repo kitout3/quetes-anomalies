@@ -238,6 +238,19 @@ function App() {
     const unsub = ref.on('value', snap => {
       const data = snap.val();
       if (data) {
+        // Convert Firebase object to proper array for players
+        if (data.players && !Array.isArray(data.players)) {
+          data.players = Array(data.playerCount).fill(null).map((_, i) => data.players[i] || null);
+        }
+        if (data.selectedCharacters && !Array.isArray(data.selectedCharacters)) {
+          data.selectedCharacters = Object.values(data.selectedCharacters);
+        }
+        if (data.drawnAnomalies && !Array.isArray(data.drawnAnomalies)) {
+          data.drawnAnomalies = Object.values(data.drawnAnomalies);
+        }
+        if (data.drawnQuetes && !Array.isArray(data.drawnQuetes)) {
+          data.drawnQuetes = Object.values(data.drawnQuetes);
+        }
         setGameState(data);
         if (data.players && userId) {
           const idx = data.players.findIndex(p => p && p.odId === userId);
@@ -292,7 +305,8 @@ function App() {
   };
 
   const startGame = async () => {
-    const allReady = gameState.players.every(p => p && p.ready && p.baseStats);
+    const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
+    const allReady = players.every(p => p && p.ready && p.baseStats);
     if (!allReady) { alert("Tous les joueurs doivent être prêts !"); return; }
     await db.ref(`games/${gameCode}`).update({ step: 'play' });
   };
@@ -306,8 +320,11 @@ function App() {
   };
 
   const nextTurn = async () => {
-    const newPlayers = [...gameState.players];
-    newPlayers[gameState.currentTurn].usedAttackDice = false;
+    const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
+    const newPlayers = [...players];
+    if (newPlayers[gameState.currentTurn]) {
+      newPlayers[gameState.currentTurn] = { ...newPlayers[gameState.currentTurn], usedAttackDice: false };
+    }
     const nextIdx = (gameState.currentTurn + 1) % gameState.playerCount;
     await db.ref(`games/${gameCode}`).update({ players: newPlayers, currentTurn: nextIdx });
   };
@@ -414,7 +431,11 @@ function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer,
   const [selectedChar, setSelectedChar] = useState(null);
   const [showStatAlloc, setShowStatAlloc] = useState(false);
 
-  const currentPlayer = playerIndex >= 0 ? gameState.players[playerIndex] : null;
+  // Ensure players is always an array
+  const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
+  const selectedCharacters = Array.isArray(gameState.selectedCharacters) ? gameState.selectedCharacters : Object.values(gameState.selectedCharacters || {});
+
+  const currentPlayer = playerIndex >= 0 ? players[playerIndex] : null;
   const needsStats = currentPlayer && !currentPlayer.baseStats;
 
   if (needsStats && !showStatAlloc) setShowStatAlloc(true);
@@ -433,8 +454,8 @@ function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer,
     }
   };
 
-  const allReady = gameState.players.every(p => p && p.ready && p.baseStats);
-  const isHost = gameState.players[0]?.odId === userId;
+  const allReady = players.every(p => p && p.ready && p.baseStats);
+  const isHost = players[0]?.odId === userId;
 
   return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 p-6" },
     React.createElement("div", { className: "max-w-4xl mx-auto" },
@@ -444,11 +465,11 @@ function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer,
           React.createElement("p", { className: "text-sm text-gray-600 mb-1" }, "Code de la partie :"),
           React.createElement("p", { className: "text-4xl font-bold text-purple-600 tracking-widest" }, gameCode)
         ),
-        React.createElement("p", { className: "text-gray-600" }, `${gameState.players.filter(p => p).length} / ${gameState.playerCount} joueurs`)
+        React.createElement("p", { className: "text-gray-600" }, `${players.filter(p => p).length} / ${gameState.playerCount} joueurs`)
       ),
 
       React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" },
-        gameState.players.map((player, idx) => React.createElement("div", {
+        players.map((player, idx) => React.createElement("div", {
           key: idx,
           onClick: () => !player && playerIndex < 0 && setSelectedSlot(idx),
           className: `rounded-xl p-4 border-2 transition-all ${player ? (player.ready ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400') : (selectedSlot === idx ? 'bg-purple-100 border-purple-500' : 'bg-gray-50 border-gray-300 hover:border-purple-400 cursor-pointer')}`
@@ -458,7 +479,7 @@ function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer,
               React.createElement("span", { className: "font-bold text-gray-800" }, player.playerName),
               React.createElement("span", { className: `px-2 py-1 rounded text-xs font-bold ${player.ready ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'}` }, player.ready ? "✓ Prêt" : "En attente")
             ),
-            React.createElement("p", { className: "text-sm text-purple-600" }, player.character.name)
+            React.createElement("p", { className: "text-sm text-purple-600" }, player.character?.name || 'Personnage')
           ) : React.createElement("div", { className: "text-center py-4" },
             React.createElement("p", { className: "text-gray-400" }, `Place ${idx + 1}`),
             React.createElement("p", { className: "text-sm text-gray-500" }, "Cliquez pour rejoindre")
@@ -475,7 +496,7 @@ function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer,
         React.createElement("p", { className: "font-semibold text-gray-700 mb-3" }, "Choisissez votre personnage :"),
         React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-3 gap-3 mb-4" },
           Object.entries(CHARACTERS).map(([key, char]) => {
-            const taken = gameState.selectedCharacters.includes(key);
+            const taken = selectedCharacters.includes(key);
             return React.createElement("button", {
               key, onClick: () => !taken && setSelectedChar(key), disabled: taken,
               className: `p-3 rounded-lg border-2 text-left transition-all ${taken ? 'bg-gray-100 border-gray-200 opacity-50' : selectedChar === key ? 'bg-purple-100 border-purple-500' : 'bg-white border-gray-300 hover:border-purple-400'}`
@@ -493,7 +514,7 @@ function LobbyScreen({ gameState, gameCode, userId, playerIndex, onJoinAsPlayer,
       ),
 
       currentPlayer && React.createElement("div", { className: "bg-green-50 rounded-xl p-4 mb-6 text-center" },
-        React.createElement("p", { className: "text-green-700 font-semibold" }, `✓ Vous jouez ${currentPlayer.playerName} (${currentPlayer.character.name})`),
+        React.createElement("p", { className: "text-green-700 font-semibold" }, `✓ Vous jouez ${currentPlayer.playerName} (${currentPlayer.character?.name || 'Personnage'})`),
         currentPlayer.ready && React.createElement("p", { className: "text-green-600 text-sm mt-1" }, "En attente des autres joueurs...")
       ),
 
@@ -566,8 +587,10 @@ function TurnGameScreen({ gameState, gameCode, currentPlayer, playerIndex, isMyT
   const [showPassStart, setShowPassStart] = useState(false);
   const [showEndGame, setShowEndGame] = useState(false);
 
-  const activePlayer = gameState.players[gameState.currentTurn];
-  const totalPdv = gameState.players.reduce((s, p) => s + (p?.pdv || 0), 0);
+  // Ensure players is always an array
+  const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
+  const activePlayer = players[gameState.currentTurn];
+  const totalPdv = players.reduce((s, p) => s + (p?.pdv || 0), 0);
   const targetPdv = gameState.playerCount * 10;
 
   useEffect(() => {
@@ -635,8 +658,8 @@ function TurnGameScreen({ gameState, gameCode, currentPlayer, playerIndex, isMyT
           activeTab === 'anomalie' && React.createElement(AnomalieTab, { player: currentPlayer, gameState, updateGame, updatePlayer: (u) => updatePlayer(playerIndex, u), isMyTurn }),
           activeTab === 'quete' && React.createElement(QueteTab, { player: currentPlayer, gameState, updateGame, updatePlayer: (u) => updatePlayer(playerIndex, u), isMyTurn }),
           activeTab === 'statistique' && React.createElement(StatistiqueTab, {}),
-          activeTab === 'de' && React.createElement(DeTab, { player: currentPlayer, gameState, updatePlayer: (idx, u) => updatePlayer(idx, u), playerIndex, isMyTurn }),
-          activeTab === 'personnage' && React.createElement(PersonnageTab, { player: currentPlayer, updatePlayer: (u) => updatePlayer(playerIndex, u), gameState, updateGame, playerIndex, onPassStart: () => setShowPassStart(true), isMyTurn })
+          activeTab === 'de' && React.createElement(DeTab, { player: currentPlayer, gameState, players, updatePlayer: (idx, u) => updatePlayer(idx, u), playerIndex, isMyTurn }),
+          activeTab === 'personnage' && React.createElement(PersonnageTab, { player: currentPlayer, updatePlayer: (u) => updatePlayer(playerIndex, u), gameState, players, updateGame, playerIndex, onPassStart: () => setShowPassStart(true), isMyTurn })
         ),
 
         React.createElement("div", { className: "bg-purple-100 rounded-xl p-3 mb-4" },
@@ -693,7 +716,8 @@ function StartPassOverlay({ player, onConfirm, onCancel }) {
 }
 
 function EndGameScreen({ gameState, onRestart }) {
-  const ranking = [...gameState.players].sort((a, b) => (b?.pdv || 0) - (a?.pdv || 0));
+  const players = Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null);
+  const ranking = [...players].filter(p => p).sort((a, b) => (b?.pdv || 0) - (a?.pdv || 0));
   const winner = ranking[0];
   return React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center p-6" },
     React.createElement("div", { className: "bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center" },
@@ -969,13 +993,16 @@ function StatistiqueTab() {
 }
 
 // ============= DE TAB =============
-function DeTab({ player, gameState, updatePlayer, playerIndex, isMyTurn }) {
+function DeTab({ player, gameState, players, updatePlayer, playerIndex, isMyTurn }) {
   const [moveResult, setMoveResult] = useState(null);
   const [attackResult, setAttackResult] = useState(null);
   const [combatMode, setCombatMode] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
   const [combatResult, setCombatResult] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
+
+  // Use players prop or fallback
+  const allPlayers = players || (Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null));
 
   const rollMove = () => {
     setIsAnimating(true);
@@ -1011,7 +1038,8 @@ function DeTab({ player, gameState, updatePlayer, playerIndex, isMyTurn }) {
 
   const executeCombat = async (oppIdx, statKey, statName) => {
     setIsAnimating(true);
-    const opponent = gameState.players[oppIdx];
+    const opponent = allPlayers[oppIdx];
+    if (!opponent) { setIsAnimating(false); return; }
 
     setTimeout(async () => {
       const atkDice = Math.floor(Math.random() * 10);
@@ -1057,7 +1085,7 @@ function DeTab({ player, gameState, updatePlayer, playerIndex, isMyTurn }) {
     }, 1000);
   };
 
-  const opponents = gameState.players.filter((p, i) => p && i !== playerIndex);
+  const opponents = allPlayers.filter((p, i) => p && i !== playerIndex);
 
   return React.createElement("div", { className: "space-y-6" },
     React.createElement("h3", { className: "text-2xl font-bold text-center text-gray-800" }, "🎲 Lancers de dés"),
@@ -1097,7 +1125,7 @@ function DeTab({ player, gameState, updatePlayer, playerIndex, isMyTurn }) {
       combatMode === 'select' ? React.createElement("div", { className: "space-y-2" },
         React.createElement("p", { className: "text-sm text-gray-600 mb-2" }, "Choisissez un adversaire :"),
         opponents.map((opp, i) => React.createElement("button", {
-          key: opp.id, onClick: () => { setSelectedOpponent(gameState.players.indexOf(opp)); setCombatMode('stat'); },
+          key: opp.id, onClick: () => { setSelectedOpponent(allPlayers.indexOf(opp)); setCombatMode('stat'); },
           className: "w-full p-3 bg-white border-2 border-orange-300 rounded-lg text-left hover:border-orange-500"
         },
           React.createElement("span", { className: "font-bold" }, opp.playerName),
@@ -1133,11 +1161,14 @@ function DeTab({ player, gameState, updatePlayer, playerIndex, isMyTurn }) {
 }
 
 // ============= PERSONNAGE TAB =============
-function PersonnageTab({ player, updatePlayer, gameState, updateGame, playerIndex, onPassStart, isMyTurn }) {
+function PersonnageTab({ player, updatePlayer, gameState, players, updateGame, playerIndex, onPassStart, isMyTurn }) {
   const [subTab, setSubTab] = useState('global');
   const [newEffect, setNewEffect] = useState({ type: 'BLESS', stat: 'endurance' });
   const [showTargetSelect, setShowTargetSelect] = useState(null);
   const [selectedStat, setSelectedStat] = useState('endurance');
+
+  // Use players prop or fallback
+  const allPlayers = players || (Array.isArray(gameState.players) ? gameState.players : Array(gameState.playerCount).fill(null).map((_, i) => gameState.players?.[i] || null));
 
   const adjustPv = (d) => isMyTurn && updatePlayer({ pvCurrent: Math.max(0, Math.min(player.character.pvMax, player.pvCurrent + d)) });
   const adjustResource = (key, d) => isMyTurn && updatePlayer({ [key]: Math.max(0, player[key] + d) });
@@ -1151,7 +1182,8 @@ function PersonnageTab({ player, updatePlayer, gameState, updateGame, playerInde
   const removeEffect = async (id) => isMyTurn && updatePlayer({ effects: (player.effects || []).filter(e => e.id !== id) });
 
   const applyEffectToTarget = async (targetIdx, effectType) => {
-    const target = gameState.players[targetIdx];
+    const target = allPlayers[targetIdx];
+    if (!target) return;
     const effect = { id: `eff_${Date.now()}`, type: effectType === 'bless' ? 'BLESS' : 'CURSE', stat: selectedStat, name: effectType === 'bless' ? `Bénédiction (${player.character.name})` : `Malédiction (${player.character.name})`, delta: effectType === 'bless' ? 2 : -2 };
     
     const targetUpdates = { effects: [...(target.effects || []), effect] };
@@ -1173,10 +1205,10 @@ function PersonnageTab({ player, updatePlayer, gameState, updateGame, playerInde
         Object.entries(STAT_NAMES).map(([k, n]) => React.createElement("option", { key: k, value: k }, n))
       ),
       React.createElement("div", { className: "space-y-2" },
-        gameState.players.map((p, idx) => p && React.createElement("button", {
-          key: p.id, onClick: () => applyEffectToTarget(idx, showTargetSelect),
+        allPlayers.map((p, idx) => p && React.createElement("button", {
+          key: p.id || idx, onClick: () => applyEffectToTarget(idx, showTargetSelect),
           className: `w-full p-4 rounded-xl border-2 text-left ${isBless ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`
-        }, React.createElement("span", { className: "font-bold" }, `${p.playerName} - ${p.character.name}`)))
+        }, React.createElement("span", { className: "font-bold" }, `${p.playerName} - ${p.character?.name || 'Personnage'}`)))
       ),
       React.createElement("button", { onClick: () => setShowTargetSelect(null), className: "w-full py-3 bg-gray-600 text-white rounded-xl font-semibold" }, "Annuler")
     );
