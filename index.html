@@ -42,231 +42,25 @@ const db = firebase.database();
 const STAT_NAMES = { endurance: "Endurance", force: "Force", vitesse: "Vitesse", perception: "Perception", sagesse: "Sagesse", intelligence: "Intelligence" };
 const STAT_MAPPING = { "Endurance": "endurance", "Force": "force", "Agilité": "vitesse", "Perception": "perception", "Sagesse": "sagesse", "Intelligence": "intelligence" };
 const STATISTIQUES = ["Endurance", "Force", "Vitesse", "Perception", "Sagesse", "Intelligence"];
-const PDV_SOURCES = {
-  KILL: { label: "Élimination", emoji: "💀", color: "text-red-600" },
-  QUEST_COMBAT: { label: "Quête combat", emoji: "⚔️", color: "text-orange-600" },
-  QUEST_EXCHANGE: { label: "Quête échange", emoji: "🔄", color: "text-blue-600" },
-  TERRITORY: { label: "Territoire", emoji: "🏰", color: "text-green-600" },
-  MONOPOLY: { label: "Monopole", emoji: "👑", color: "text-purple-600" },
-  BOSS: { label: "Boss", emoji: "🐉", color: "text-yellow-600" },
-  BONUS: { label: "Bonus", emoji: "✨", color: "text-pink-600" },
-  EVENT: { label: "Événement", emoji: "🎭", color: "text-indigo-600" },
-  START: { label: "Passage Départ", emoji: "🏁", color: "text-teal-600" }
-};
-
-const BIOMES = {
-  FORET: { name: "Forêt aux arbres Cuivrés", resource: "cuivre", color: "from-amber-600 to-amber-800", emoji: "🌳" },
-  DESERT: { name: "Désert aux sables Argentés", resource: "argent", color: "from-gray-400 to-gray-600", emoji: "🏜️" },
-  MONTAGNE: { name: "Montagne aux roches Obsidiennes", resource: "obsidienne", color: "from-slate-700 to-slate-900", emoji: "⛰️" }
-};
-
-const BOSSES = {
-  FORET: { name: "Gardien de la Forêt", difficulty: 6, pdv: 3, emoji: "🌲", biome: "FORET" },
-  DESERT: { name: "Titan du Désert", difficulty: 8, pdv: 4, emoji: "🏜️", biome: "DESERT" },
-  MONTAGNE: { name: "Seigneur de la Montagne", difficulty: 10, pdv: 5, emoji: "⛰️", biome: "MONTAGNE" }
-};
-
-const OBJECTIVES = [
-  { id: 'OBJ_OR', resource: 'or', amount: 12, pdv: 3, label: '12 Or', emoji: '💰' },
-  { id: 'OBJ_CUIVRE', resource: 'cuivre', amount: 9, pdv: 3, label: '9 Cuivre', emoji: '🥉' },
-  { id: 'OBJ_ARGENT', resource: 'argent', amount: 6, pdv: 3, label: '6 Argent', emoji: '🥈' },
-  { id: 'OBJ_OBSIDIENNE', resource: 'obsidienne', amount: 3, pdv: 3, label: '3 Obsidienne', emoji: '⬛' }
-];
-
-const EXCHANGE_RATES = {
-  cuivre: { toOr: 2, label: '1 Cuivre = 2 Or' },
-  argent: { toOr: 3, label: '1 Argent = 3 Or' },
-  obsidienne: { toOr: 4, label: '1 Obsidienne = 4 Or' }
-};
-
-const MAJOR_EVENTS = [
-  "🎭 La Fresque s'illumine ! Tous les joueurs gagnent +2 Or.",
-  "🎭 Un tremblement secoue le plateau ! Chaque joueur perd 1 ressource au hasard.",
-  "🎭 Bénédiction divine ! Le joueur actif gagne une Bénédiction aléatoire.",
-  "🎭 Malédiction ancestrale ! Le joueur en tête reçoit une Malédiction aléatoire.",
-  "🎭 Pluie de ressources ! Chaque joueur gagne 1 ressource de son biome préféré.",
-  "🎭 Marché noir ! Les échanges coûtent 50% moins cher ce tour.",
-  "🎭 Rage des monstres ! Les quêtes ont +2 difficulté ce tour.",
-  "🎭 Faveur des dieux ! Le prochain jet a +3 bonus.",
-  "🎭 Eclipse totale ! Toutes les malédictions sont levées.",
-  "🎭 Résurrection ! Un joueur mort revient avec 50% PV."
-];
-
-const RESOURCE_MAPPING = {
-  "Pièce d'Or": { key: "or", displayName: "Or" },
-  "Ecorce Cuivrée": { key: "cuivre", displayName: "Cuivre" },
-  "Sable Argenté": { key: "argent", displayName: "Argent" },
-  "Roche Obsidienne": { key: "obsidienne", displayName: "Obsidienne" }
-};
-
+const PDV_SOURCES = { KILL: { label: "Élimination", emoji: "💀", color: "text-red-600" }, QUEST_COMBAT: { label: "Quête combat", emoji: "⚔️", color: "text-orange-600" }, QUEST_EXCHANGE: { label: "Quête échange", emoji: "🔄", color: "text-blue-600" }, TERRITORY: { label: "Territoire", emoji: "🏰", color: "text-green-600" }, BOSS: { label: "Boss", emoji: "🐉", color: "text-yellow-600" }, BONUS: { label: "Bonus", emoji: "✨", color: "text-pink-600" }, START: { label: "Départ", emoji: "🏁", color: "text-teal-600" } };
+const BIOMES = { FORET: { name: "Forêt aux arbres Cuivrés", resource: "cuivre", color: "from-amber-600 to-amber-800", emoji: "🌳" }, DESERT: { name: "Désert aux sables Argentés", resource: "argent", color: "from-gray-400 to-gray-600", emoji: "🏜️" }, MONTAGNE: { name: "Montagne aux roches Obsidiennes", resource: "obsidienne", color: "from-slate-700 to-slate-900", emoji: "⛰️" } };
+const BOSSES = { FORET: { name: "Gardien de la Forêt", difficulty: 6, pdv: 3, emoji: "🌲" }, DESERT: { name: "Titan du Désert", difficulty: 8, pdv: 4, emoji: "🏜️" }, MONTAGNE: { name: "Seigneur de la Montagne", difficulty: 10, pdv: 5, emoji: "⛰️" } };
+const OBJECTIVES = [{ id: 'OBJ_OR', resource: 'or', amount: 12, pdv: 3, label: '12 Or', emoji: '💰' }, { id: 'OBJ_CUIVRE', resource: 'cuivre', amount: 9, pdv: 3, label: '9 Cuivre', emoji: '🥉' }, { id: 'OBJ_ARGENT', resource: 'argent', amount: 6, pdv: 3, label: '6 Argent', emoji: '🥈' }, { id: 'OBJ_OBSIDIENNE', resource: 'obsidienne', amount: 3, pdv: 3, label: '3 Obsidienne', emoji: '⬛' }];
+const MAJOR_EVENTS = ["🎭 La Fresque s'illumine ! Tous les joueurs gagnent +2 Or.", "🎭 Un tremblement secoue le plateau ! Chaque joueur perd 1 ressource.", "🎭 Bénédiction divine ! Le joueur actif gagne une Bénédiction.", "🎭 Malédiction ancestrale ! Le joueur en tête reçoit une Malédiction.", "🎭 Pluie de ressources !", "🎭 Marché noir ! Les échanges coûtent 50% moins cher.", "🎭 Rage des monstres ! +2 difficulté ce tour.", "🎭 Faveur des dieux ! +3 au prochain jet.", "🎭 Eclipse totale ! Malédictions levées.", "🎭 Résurrection !"];
+const RESOURCE_MAPPING = { "Pièce d'Or": { key: "or" }, "Ecorce Cuivrée": { key: "cuivre" }, "Sable Argenté": { key: "argent" }, "Roche Obsidienne": { key: "obsidienne" } };
 const BASE_GOLD = 10;
 
 const CHARACTERS = {
-  CHASSEUR: {
-    name: "Le Chasseur", pvMax: 6,
-    role: "Harceleur – Quêtes – Combat à distance",
-    concept: "Spécialiste du contrôle spatial et de la pression indirecte.",
-    skills: [
-      "Attaque à distance (territoire, joueur, quête)",
-      "Aucun dégât de riposte subi à distance",
-      "+1 permanent sur toutes les attaques à distance"
-    ],
-    style: "Tactique, opportuniste, faible en défense directe."
-  },
-  MARCHAND: {
-    name: "Le Marchand", pvMax: 6,
-    role: "Économie – Monopoles – Fin de partie",
-    concept: "Transforme l'or en levier stratégique.",
-    skills: [
-      "+4 Or au départ (14 total) et à chaque passage Départ",
-      "Achète territoires neutres (coût = difficulté en Or)",
-      "Achète territoires adverses pour 10 Or"
-    ],
-    style: "Gestionnaire, sécurisant, dangereux s'il n'est pas contenu."
-  },
-  HOMME_BETE: {
-    name: "L'Homme-bête", pvMax: 10,
-    role: "Berserker – Combat prolongé",
-    concept: "Convertit sa vitalité en puissance brute.",
-    skills: [
-      "Sacrifie des PV pour +jet (tous combats)",
-      "Se soigne de 2 PV sur attaque réussie",
-      "Inflige 1 dégât de riposte en défense"
-    ],
-    style: "Agressif, résilient, très difficile à éliminer seul."
-  },
-  CHEVALIER: {
-    name: "Le Chevalier", pvMax: 10,
-    role: "Conquête – Contrôle de carte",
-    concept: "Chaque victoire militaire devient une expansion durable.",
-    skills: [
-      "Capture le territoire adverse sur victoire",
-      "+1 lors des attaques de territoires neutres",
-      "+1 PDV supplémentaire par biome à la fin de partie"
-    ],
-    style: "Expansionniste, dominateur, puissant sur la durée."
-  },
-  VICAIRE: {
-    name: "Le Vicaire", pvMax: 8,
-    role: "Support – Optimisation – Contrôle indirect",
-    concept: "Manipule la chance et stabilise les situations critiques.",
-    skills: [
-      "Relance le dé de stat (coût: 1 ressource aléatoire)",
-      "Bénédiction sur soi/allié (coût: 2 ressources) - Recharge: Départ",
-      "+1 PDV par quête accomplie"
-    ],
-    style: "Flexible, diplomatique, fort en optimisation."
-  },
-  HERETIQUE: {
-    name: "L'Hérétique", pvMax: 8,
-    role: "Sabotage – Malédictions – Assassinat",
-    concept: "Affaiblit avant d'achever.",
-    skills: [
-      "Choisit la statistique lors d'attaque joueur",
-      "Malédiction (coût: 3 PV) - Recharge: Départ",
-      "+1 PDV sur kill de joueur maudit"
-    ],
-    style: "Cruel, calculateur, extrêmement punitif en duel."
-  }
+  CHASSEUR: { name: "Le Chasseur", pvMax: 6, role: "Harceleur – Quêtes – Combat à distance", concept: "Spécialiste du contrôle spatial.", skills: ["Attaque à distance", "Aucun dégât de riposte à distance", "+1 permanent à distance"] },
+  MARCHAND: { name: "Le Marchand", pvMax: 6, role: "Économie – Monopoles", concept: "Transforme l'or en levier stratégique.", skills: ["+4 Or au départ et à chaque Départ", "Achète territoires neutres", "Achète territoires adverses pour 10 Or"] },
+  HOMME_BETE: { name: "L'Homme-bête", pvMax: 10, role: "Berserker – Combat prolongé", concept: "Convertit sa vitalité en puissance.", skills: ["Sacrifie des PV pour +jet", "Se soigne de 2 PV sur attaque réussie", "Inflige 1 dégât de riposte"] },
+  CHEVALIER: { name: "Le Chevalier", pvMax: 10, role: "Conquête – Contrôle de carte", concept: "Chaque victoire = expansion.", skills: ["Capture le territoire adverse", "+1 vs territoires neutres", "+1 PDV/biome en fin de partie"] },
+  VICAIRE: { name: "Le Vicaire", pvMax: 8, role: "Support – Optimisation", concept: "Manipule la chance.", skills: ["Relance la stat (coût: 1 ressource)", "Bénédiction", "+1 PDV par quête"] },
+  HERETIQUE: { name: "L'Hérétique", pvMax: 8, role: "Sabotage – Assassinat", concept: "Affaiblit avant d'achever.", skills: ["Choisit la stat en attaque joueur", "Malédiction (coût: 3 PV)", "+1 PDV sur kill maudit"] }
 };
 
-// ============= CARD DECKS (Contenu exact du PDF) =============
-const ANOMALIES = [
-  // Soins (pages 38-42)
-  "Soignez 2 [Point de vie].",
-  "Soignez 4 [Point de vie].",
-  "Soignez 6 [Point de vie].",
-  "Soignez 8 [Point de vie].",
-  "Soignez 10 [Point de vie].",
-  // Dégâts (pages 43-47)
-  "Perdez 2 [Point de vie].",
-  "Perdez 4 [Point de vie].",
-  "Perdez 6 [Point de vie].",
-  "Perdez 8 [Point de vie].",
-  "Perdez 10 [Point de vie].",
-  // Spéciaux (pages 48-49)
-  "Recharger votre objet consomable.",
-  "Recharger votre pouvoir.",
-  // Bénédictions (pages 50-53)
-  "Obtenez [Bénédiction].",
-  "Obtenez [Bénédiction].",
-  "Obtenez [Bénédiction].",
-  "Obtenez [Bénédiction].",
-  // Malédictions (pages 54-57)
-  "Obtenez [Malédiction].",
-  "Obtenez [Malédiction].",
-  "Obtenez [Malédiction].",
-  "Obtenez [Malédiction].",
-  // Gains ressources (pages 58-65)
-  "Gagnez 8 [Pièce d'Or].",
-  "Gagnez 4 [Pièce d'Or].",
-  "Gagnez 6 [Ecorce Cuivrée].",
-  "Gagnez 3 [Ecorce Cuivrée].",
-  "Gagnez 4 [Sable Argenté].",
-  "Gagnez 2 [Sable Argenté].",
-  "Gagnez 2 [Roche Obsidienne].",
-  "Gagnez 1 [Roche Obsidienne].",
-  // Pertes ressources (pages 66-73)
-  "Perdez 8 [Pièce d'Or].",
-  "Perdez 4 [Pièce d'Or].",
-  "Perdez 6 [Ecorce Cuivrée].",
-  "Perdez 3 [Ecorce Cuivrée].",
-  "Perdez 4 [Sable Argenté].",
-  "Perdez 2 [Sable Argenté].",
-  "Perdez 2 [Roche Obsidienne].",
-  "Perdez 1 [Roche Obsidienne]."
-];
-
-const QUETES = [
-  // Forêt aux arbres Cuivrés (pages 3-8)
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Forêt aux arbres Cuivrés], éliminer la créature de difficulté 10 pour gagner 5 [Point de victoire].",
-  // Désert aux sables Argentés (pages 9-14)
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Désert aux sables Argentés], éliminer la créature de difficulté 10 pour gagner 5 [Point de victoire].",
-  // Montagne aux roches Obsidiennes (pages 15-20)
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 6 pour gagner 3 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 8 pour gagner 4 [Point de victoire].",
-  "Dans le territoire [Montagne aux roches Obsidiennes], éliminer la créature de difficulté 10 pour gagner 5 [Point de victoire].",
-  // Échanges Or (pages 21-22, 28-29)
-  "Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].",
-  "Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].",
-  "Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].",
-  "Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].",
-  // Échanges Cuivre (pages 23-24, 30-31)
-  "Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].",
-  "Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].",
-  "Echanger 3 [Ecorce Cuivrée] contre 1 [Point de victoire].",
-  "Echanger 3 [Ecorce Cuivrée] contre 1 [Point de victoire].",
-  // Échanges Argent (pages 25-26, 32-33)
-  "Echanger 4 [Sable Argenté] contre 2 [Point de victoire].",
-  "Echanger 4 [Sable Argenté] contre 2 [Point de victoire].",
-  "Echanger 2 [Sable Argenté] contre 1 [Point de victoire].",
-  "Echanger 2 [Sable Argenté] contre 1 [Point de victoire].",
-  // Échanges Obsidienne (pages 27, 34-35, 74)
-  "Echanger 2 [Roche Obsidienne] contre 2 [Point de victoire].",
-  "Echanger 2 [Roche Obsidienne] contre 2 [Point de victoire].",
-  "Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire].",
-  "Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire].",
-  // Spéciales (pages 36-37)
-  "Allez en [Prison].",
-  "Obtenez l'objet [Clefs de la prison]."
-];
-
-// ============= PARSING =============
-
- // Or de base pour tous les joueurs
+const ANOMALIES = ["Soignez 2 [Point de vie].", "Soignez 4 [Point de vie].", "Soignez 6 [Point de vie].", "Perdez 2 [Point de vie].", "Perdez 4 [Point de vie].", "Perdez 6 [Point de vie].", "Obtenez [Bénédiction].", "Obtenez [Bénédiction].", "Obtenez [Malédiction].", "Obtenez [Malédiction].", "Gagnez 8 [Pièce d'Or].", "Gagnez 4 [Pièce d'Or].", "Gagnez 3 [Ecorce Cuivrée].", "Gagnez 2 [Sable Argenté].", "Gagnez 1 [Roche Obsidienne].", "Perdez 4 [Pièce d'Or].", "Perdez 2 [Ecorce Cuivrée].", "Perdez 1 [Sable Argenté]."];
+const QUETES = ["Dans le territoire [Forêt], difficulté 6 pour 3 [Point de victoire].", "Dans le territoire [Forêt], difficulté 8 pour 4 [Point de victoire].", "Dans le territoire [Désert], difficulté 6 pour 3 [Point de victoire].", "Dans le territoire [Désert], difficulté 8 pour 4 [Point de victoire].", "Dans le territoire [Montagne], difficulté 6 pour 3 [Point de victoire].", "Dans le territoire [Montagne], difficulté 10 pour 5 [Point de victoire].", "Echanger 8 [Pièce d'Or] contre 2 [Point de victoire].", "Echanger 4 [Pièce d'Or] contre 1 [Point de victoire].", "Echanger 6 [Ecorce Cuivrée] contre 2 [Point de victoire].", "Echanger 3 [Ecorce Cuivrée] contre 1 [Point de victoire].", "Echanger 4 [Sable Argenté] contre 2 [Point de victoire].", "Echanger 2 [Sable Argenté] contre 1 [Point de victoire].", "Echanger 2 [Roche Obsidienne] contre 2 [Point de victoire].", "Echanger 1 [Roche Obsidienne] contre 1 [Point de victoire]."];
 
 // ============= RULES ENGINE =============
 const rulesEngine = {
@@ -290,22 +84,8 @@ function parseAnomaly(text) {
   let m;
   if (m = text.match(/Soignez (\d+)/)) return { type: 'heal', amount: +m[1] };
   if (m = text.match(/Perdez (\d+) \[Point de vie\]/)) return { type: 'damage', amount: +m[1] };
-  // Bénédiction avec stat spécifique
-  if (m = text.match(/Bénédiction\] de \[(.+?)\]/)) return { type: 'bless', stat: STAT_MAPPING[m[1]], statName: m[1] };
-  // Bénédiction sans stat (aléatoire)
-  if (text.includes('[Bénédiction]') && !text.includes('de [')) {
-    const stats = Object.keys(STAT_NAMES);
-    const randomStat = stats[Math.floor(Math.random() * stats.length)];
-    return { type: 'bless', stat: randomStat, statName: STAT_NAMES[randomStat], isRandom: true };
-  }
-  // Malédiction avec stat spécifique
-  if (m = text.match(/Malédiction\] de \[(.+?)\]/)) return { type: 'curse', stat: STAT_MAPPING[m[1]], statName: m[1] };
-  // Malédiction sans stat (aléatoire)
-  if (text.includes('[Malédiction]') && !text.includes('de [')) {
-    const stats = Object.keys(STAT_NAMES);
-    const randomStat = stats[Math.floor(Math.random() * stats.length)];
-    return { type: 'curse', stat: randomStat, statName: STAT_NAMES[randomStat], isRandom: true };
-  }
+  if (text.includes('[Bénédiction]')) { const stats = Object.keys(STAT_NAMES); return { type: 'bless', stat: stats[Math.floor(Math.random() * stats.length)] }; }
+  if (text.includes('[Malédiction]')) { const stats = Object.keys(STAT_NAMES); return { type: 'curse', stat: stats[Math.floor(Math.random() * stats.length)] }; }
   if (m = text.match(/Gagnez (\d+) \[Pièce/)) return { type: 'gain', resource: 'or', amount: +m[1] };
   if (m = text.match(/Gagnez (\d+) \[Ecorce/)) return { type: 'gain', resource: 'cuivre', amount: +m[1] };
   if (m = text.match(/Gagnez (\d+) \[Sable/)) return { type: 'gain', resource: 'argent', amount: +m[1] };
@@ -313,63 +93,23 @@ function parseAnomaly(text) {
   if (m = text.match(/Perdez (\d+) \[Pièce/)) return { type: 'lose', resource: 'or', amount: +m[1] };
   if (m = text.match(/Perdez (\d+) \[Ecorce/)) return { type: 'lose', resource: 'cuivre', amount: +m[1] };
   if (m = text.match(/Perdez (\d+) \[Sable/)) return { type: 'lose', resource: 'argent', amount: +m[1] };
-  if (m = text.match(/Perdez (\d+) \[Roche/)) return { type: 'lose', resource: 'obsidienne', amount: +m[1] };
-  if (text.includes('Recharger votre objet')) return { type: 'recharge_item' };
-  if (text.includes('Recharger votre pouvoir')) return { type: 'recharge_power' };
   return { type: 'other' };
 }
 
 function parseQuest(text) {
   const pdvMatch = text.match(/(\d+) \[Point de victoire\]/);
   const pdv = pdvMatch ? +pdvMatch[1] : 0;
-  
   const exchMatch = text.match(/Echanger (\d+) \[(.+?)\] contre/);
-  if (exchMatch) {
-    const resInfo = RESOURCE_MAPPING[exchMatch[2]];
-    return { pdv, isExchange: true, isCombat: false, resourceKey: resInfo?.key, resourceAmount: +exchMatch[1] };
-  }
-  
-  // Combat avec stat spécifique
-  const combatMatchWithStat = text.match(/difficulté (\d+) en \[(.+?)\]/);
-  if (combatMatchWithStat) {
-    return { pdv, isExchange: false, isCombat: true, difficulty: +combatMatchWithStat[1], stat: STAT_MAPPING[combatMatchWithStat[2]], statName: combatMatchWithStat[2] };
-  }
-  
-  // Combat sans stat (stat aléatoire au moment du combat)
-  const combatMatch = text.match(/difficulté (\d+) pour gagner/);
-  if (combatMatch) {
-    // Stat aléatoire parmi les 6
-    const statKeys = Object.keys(STAT_NAMES);
-    const randomKey = statKeys[Math.floor(Math.random() * statKeys.length)];
-    return { pdv, isExchange: false, isCombat: true, difficulty: +combatMatch[1], stat: randomKey, statName: STAT_NAMES[randomKey], isRandomStat: true };
-  }
-  
-  // Quêtes spéciales
-  if (text.includes('[Prison]')) return { pdv: 0, isExchange: false, isCombat: false, isSpecial: true, specialType: 'prison' };
-  if (text.includes('[Clefs de la prison]')) return { pdv: 0, isExchange: false, isCombat: false, isSpecial: true, specialType: 'keys' };
-  
+  if (exchMatch) { const resInfo = RESOURCE_MAPPING[exchMatch[2]]; return { pdv, isExchange: true, isCombat: false, resourceKey: resInfo?.key, resourceAmount: +exchMatch[1] }; }
+  const combatMatch = text.match(/difficulté (\d+) pour/);
+  if (combatMatch) { const stats = Object.keys(STAT_NAMES); return { pdv, isExchange: false, isCombat: true, difficulty: +combatMatch[1], stat: stats[Math.floor(Math.random() * stats.length)] }; }
   return { pdv, isExchange: false, isCombat: false };
 }
 
-// Fonction pour obtenir une ressource aléatoire disponible
-function getRandomAvailableResource(player) {
-  const available = [];
-  if (player.or > 0) available.push('or');
-  if (player.cuivre > 0) available.push('cuivre');
-  if (player.argent > 0) available.push('argent');
-  if (player.obsidienne > 0) available.push('obsidienne');
-  if (available.length === 0) return null;
-  return available[Math.floor(Math.random() * available.length)];
-}
-
-// Fonction pour compter les territoires par biome
-function countTerritoriesByBiome(territories) {
-  const counts = { FORET: 0, DESERT: 0, MONTAGNE: 0 };
-  (territories || []).forEach(t => {
-    if (counts[t.biome] !== undefined) counts[t.biome]++;
-  });
-  return counts;
-}
+function countTerritoriesByBiome(territories) { const c = { FORET: 0, DESERT: 0, MONTAGNE: 0 }; (territories || []).forEach(t => { if (c[t.biome] !== undefined) c[t.biome]++; }); return c; }
+function genCode() { const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)]; return c; }
+function ensureArray(data, len = 0) { if (Array.isArray(data)) return data; if (data && typeof data === 'object') return Object.values(data); return len > 0 ? Array(len).fill(null) : []; }
+function getRandomResource(player) { const a = []; if (player.or > 0) a.push('or'); if (player.cuivre > 0) a.push('cuivre'); if (player.argent > 0) a.push('argent'); if (player.obsidienne > 0) a.push('obsidienne'); return a.length > 0 ? a[Math.floor(Math.random() * a.length)] : null; }
 
 // ============= MAIN APP =============
 function App() {
@@ -441,35 +181,15 @@ function App() {
   const updatePlayer = async (idx, updates) => { await db.ref(`games/${gameCode}/players/${idx}`).update(updates); };
 
   const addPdvWithHistory = async (idx, amount, source, details = {}) => {
-    const gameRef = db.ref(`games/${gameCode}`);
-    const now = Date.now();
-
-    await gameRef.transaction(g => {
-      if (!g || !g.players || !g.players[idx]) return g;
-
-      const playersArr = ensureArray(g.players, g.playerCount || (Array.isArray(g.players) ? g.players.length : undefined));
-      const player = { ...playersArr[idx] };
-
-      const entry = { id: `pdv_${now}_${Math.floor(Math.random() * 1e6)}`, amount, source, details, timestamp: now };
-      const newHistory = [...(player.pdvHistory || []), entry];
-      player.pdv = (player.pdv || 0) + amount;
-      player.pdvHistory = newHistory;
-
-      playersArr[idx] = player;
-      g.players = playersArr;
-
-      const totalPdv = playersArr.reduce((s, p) => s + (p?.pdv || 0), 0);
-      const newThreshold = Math.floor(totalPdv / 10);
-      const last = g.lastEventThreshold || 0;
-
-      if (newThreshold > last) {
-        const eventText = MAJOR_EVENTS[Math.floor(Math.random() * MAJOR_EVENTS.length)];
-        g.lastEventThreshold = newThreshold;
-        g.pendingEvent = { text: eventText, threshold: newThreshold * 10 };
-      }
-
-      return g;
-    });
+    const player = gameState.players[idx]; if (!player) return;
+    const newHistory = [...(player.pdvHistory || []), { id: `pdv_${Date.now()}`, amount, source, details, timestamp: Date.now() }];
+    await updatePlayer(idx, { pdv: player.pdv + amount, pdvHistory: newHistory });
+    const totalPdv = gameState.players.reduce((s, p) => s + (p?.pdv || 0), 0) + amount;
+    const newThreshold = Math.floor(totalPdv / 10);
+    if (newThreshold > (gameState.lastEventThreshold || 0)) {
+      const eventText = MAJOR_EVENTS[Math.floor(Math.random() * MAJOR_EVENTS.length)];
+      await updateGame({ lastEventThreshold: newThreshold, pendingEvent: { text: eventText, threshold: newThreshold * 10 } });
+    }
   };
 
   const nextTurn = async () => {
@@ -652,28 +372,9 @@ function TurnGameScreen({ gameState, gameCode, currentPlayer, playerIndex, isMyT
   useEffect(() => { if (isMyTurn && currentPlayer && !currentPlayer.usedAttackDice) setShowStartOverlay(true); }, [gameState.currentTurn]);
 
   const handlePassDepart = async () => {
-    const territoryCount = countTerritoriesByBiome(currentPlayer.territories);
     const bonus = rulesEngine.getPassBonus(currentPlayer);
-    const resourceGains = {
-      cuivre: territoryCount.FORET,
-      argent: territoryCount.DESERT,
-      obsidienne: territoryCount.MONTAGNE
-    };
-
-    const updates = {
-      or: (currentPlayer.or || 0) + (bonus.or || 0),
-      cuivre: (currentPlayer.cuivre || 0) + resourceGains.cuivre,
-      argent: (currentPlayer.argent || 0) + resourceGains.argent,
-      obsidienne: (currentPlayer.obsidienne || 0) + resourceGains.obsidienne,
-      tourPlateau: (currentPlayer.tourPlateau || 0) + 1,
-      usedAttackDice: false,
-      rerollAvailable: true,
-      blessAvailable: currentPlayer.characterKey === 'VICAIRE',
-      curseAvailable: currentPlayer.characterKey === 'HERETIQUE'
-    };
-
+    const updates = { tourPlateau: currentPlayer.tourPlateau + 1, or: currentPlayer.or + 2 + (bonus.or || 0) };
     await updatePlayer(playerIndex, updates);
-    await addPdvWithHistory(playerIndex, 1, 'START', { tour: updates.tourPlateau });
     setShowStartOverlay(false);
   };
 
@@ -767,10 +468,10 @@ function TurnGameScreen({ gameState, gameCode, currentPlayer, playerIndex, isMyT
     React.createElement("div", { className: "p-4 max-w-md mx-auto" },
       activeTab === 'tirages' && React.createElement(TiragesTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame }),
       activeTab === 'de' && React.createElement(DeTab, { player: currentPlayer, playerIndex, isMyTurn, updatePlayer, gameState }),
-      activeTab === 'attaque' && React.createElement(AttaqueTab, { gameState, gameCode, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory, players }),
+      activeTab === 'attaque' && React.createElement(AttaqueTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory, players }),
       activeTab === 'objectif' && React.createElement(ObjectifTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory }),
       activeTab === 'echange' && React.createElement(EchangeTab, { player: currentPlayer, playerIndex, isMyTurn, updatePlayer }),
-      activeTab === 'pari' && React.createElement(PariTab, { gameState, gameCode, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, players }),
+      activeTab === 'pari' && React.createElement(PariTab, { gameState, player: currentPlayer, playerIndex, isMyTurn, updatePlayer, updateGame, players }),
       activeTab === 'event' && React.createElement(EventTab, { gameState, updateGame, isMyTurn }),
       activeTab === 'perso' && React.createElement(PersonnageTab, { player: currentPlayer, playerIndex, isMyTurn, updatePlayer }),
       activeTab === 'pdv' && React.createElement(PdvHistoryTab, { player: currentPlayer, gameState, players })
@@ -941,7 +642,7 @@ function DeTab({ player, playerIndex, isMyTurn, updatePlayer, gameState }) {
 }
 
 // ============= ATTAQUE TAB =============
-function AttaqueTab({ gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory, players }) {
+function AttaqueTab({ gameState, player, playerIndex, isMyTurn, updatePlayer, updateGame, addPdvWithHistory, players }) {
   const [subTab, setSubTab] = useState('biome');
   return React.createElement("div", { className: "space-y-4" },
     React.createElement("div", { className: "flex gap-2 mb-4" },
@@ -949,13 +650,13 @@ function AttaqueTab({ gameState, gameCode, player, playerIndex, isMyTurn, update
       React.createElement("button", { onClick: () => setSubTab('boss'), className: `flex-1 py-2 rounded-lg font-semibold text-sm ${subTab === 'boss' ? 'bg-red-600 text-white' : 'bg-gray-200'}` }, "🐉 Boss"),
       React.createElement("button", { onClick: () => setSubTab('combat'), className: `flex-1 py-2 rounded-lg font-semibold text-sm ${subTab === 'combat' ? 'bg-orange-600 text-white' : 'bg-gray-200'}` }, "⚔️ Combat")
     ),
-    subTab === 'biome' && React.createElement(BiomeAttack, { gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }),
-    subTab === 'boss' && React.createElement(BossAttack, { gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory }),
-    subTab === 'combat' && React.createElement(CombatAttack, { gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players })
+    subTab === 'biome' && React.createElement(BiomeAttack, { gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }),
+    subTab === 'boss' && React.createElement(BossAttack, { gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory }),
+    subTab === 'combat' && React.createElement(CombatAttack, { gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players })
   );
 }
 
-function BiomeAttack({ gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }) {
+function BiomeAttack({ gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }) {
   const [mode, setMode] = useState('select');
   const [target, setTarget] = useState(null);
   const [stat, setStat] = useState(null);
@@ -1033,7 +734,7 @@ function BiomeAttack({ gameState, gameCode, player, playerIndex, isMyTurn, updat
   );
 }
 
-function BossAttack({ gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory }) {
+function BossAttack({ gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory }) {
   const [mode, setMode] = useState('select');
   const [target, setTarget] = useState(null);
   const [stat, setStat] = useState(null);
@@ -1115,7 +816,7 @@ function BossAttack({ gameState, gameCode, player, playerIndex, isMyTurn, update
   );
 }
 
-function CombatAttack({ gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }) {
+function CombatAttack({ gameState, player, playerIndex, isMyTurn, updatePlayer, addPdvWithHistory, players }) {
   const [mode, setMode] = useState('select');
   const [target, setTarget] = useState(null);
   const [stat, setStat] = useState(null);
@@ -1169,7 +870,7 @@ function CombatAttack({ gameState, gameCode, player, playerIndex, isMyTurn, upda
       const heal = rulesEngine.getHealOnSuccess(player);
       res.damage = damage; res.died = died;
 
-      if (defIdx >= 0) await db.ref(`games/${gameCode}/players/${defIdx}`).update({ pvCurrent: newDefPv });
+      if (defIdx >= 0) await db.ref(`games/${gameState.code}/players/${defIdx}`).update({ pvCurrent: newDefPv });
       if (heal > 0) await updatePlayer(playerIndex, { pvCurrent: Math.min(player.character.pvMax, player.pvCurrent + heal) });
 
       if (died) {
@@ -1345,7 +1046,7 @@ function EchangeTab({ player, playerIndex, isMyTurn, updatePlayer }) {
 }
 
 // ============= PARI TAB =============
-function PariTab({ gameState, gameCode, player, playerIndex, isMyTurn, updatePlayer, updateGame, players }) {
+function PariTab({ gameState, player, playerIndex, isMyTurn, updatePlayer, updateGame, players }) {
   const [betAmount, setBetAmount] = useState(1);
   const [targetPlayer, setTargetPlayer] = useState(null);
   const [prediction, setPrediction] = useState('win');
@@ -1366,7 +1067,7 @@ function PariTab({ gameState, gameCode, player, playerIndex, isMyTurn, updatePla
     const betterIdx = allPlayers.findIndex(p => p && p.odId === bet.odId);
     if (betterIdx < 0) return;
     const winnings = won ? bet.amount * 2 : 0;
-    if (winnings > 0) await db.ref(`games/${gameCode}/players/${betterIdx}`).update({ or: (allPlayers[betterIdx].or || 0) + winnings });
+    if (winnings > 0) await db.ref(`games/${gameState.code}/players/${betterIdx}`).update({ or: (allPlayers[betterIdx].or || 0) + winnings });
     const newBets = currentBets.filter(b => b.id !== bet.id);
     await updateGame({ activeBets: newBets });
   };
